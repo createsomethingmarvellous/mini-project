@@ -34,6 +34,7 @@ carries the project context. Say for example:
 WHAT IS IN HERE
 ===============
 README.md        Short project overview
+RUN_GUIDE.md     Step-by-step guide to run everything  <- START HERE TO RUN
 GUIDE.md         Context + task board + steps per task   <- MAIN FILE
 DECISIONS.md     Decisions log (the adopted plan is recorded there)
 .gitignore       Stops datasets/checkpoints/kaggle.json being committed
