@@ -102,7 +102,19 @@ Claim a task by editing the **Owner** column and status, committing just that ch
 
 **Unblocking rule:** once every task in a "Depends on" list is `✅ Done`, flip that task to `🟢 Ready`. Whoever notices first should update it; don't wait for someone else.
 
-**Parallelism tip:** only one person needs to run notebook 01 (it fills the shared Drive folder). After that, one person can do the test side (T6 → T12 → T8/T13) while another does the training side (T9 → T10 → T14). T18 can run alongside everything else at any time.
+**Run order (sequential, one Colab run at a time):**
+T0 → T1–T5 → T6a → **T7** → T6 → T9 → T12 → T10 → T8/T11/T13 → T14 (seed 123, then 2024) → T15 → T16.
+Different people can take turns, but only one person runs a notebook at any moment. When you finish a step, mark it ✅ on the board and tell the next person. T18 (literature survey) needs no Colab, so it can be done at any time.
+
+### For teammates: how to take a turn (about 5 minutes, once)
+Anup runs notebooks 01 and 02, because they create several GB of data, which counts against the Drive of whoever creates it. Teammates can take any later step (training, evaluation). To get access:
+1. **Anup shares** the Drive folder `mini_project` with you as **Editor**.
+2. **You add it to your Drive:** Shared with me → right-click `mini_project` → Organize → **Add shortcut** → My Drive. The shortcut must be named exactly `mini_project`, directly in My Drive.
+3. **Open notebooks from Drive:** `mini_project/repo/notebooks/` → double-click → **Open with Google Colab**. Run the first cell as usual. "No GitHub secrets found" is fine; you don't need a token or `kaggle.json`.
+
+Rules:
+- Only Anup commits from Colab; teammates update this board from their own PC clone of the repo.
+- Don't edit `scripts/config.py` in the shared folder without telling the team.
 
 ---
 
