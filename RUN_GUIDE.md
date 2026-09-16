@@ -98,6 +98,7 @@ Only Anup commits from Colab.
 | Colab disconnected | Rerun the same cells; builders skip finished files and training resumes |
 | "Repo not found" | Run notebook 01 first (or add the Drive shortcut, Part 3) |
 | "No ASVspoof2019_LA_cm_protocols folder" | Step 1's download or unzip didn't finish; rerun those cells |
+| Clone fails with `403` / "Write access to repository not granted" | The token can't access this repo. Edit it on GitHub (Repository access: `mini-project`; Contents: **Read and write**), update the `GITHUB_TOKEN` secret if the token changed, then rerun the cell |
 | `git push` failed in a cell | Check the two Colab secrets (Part 0.3); results are still saved on Drive |
 | Any other error | Copy the full red error text and ask for help; don't change settings mid-way |
 
