@@ -1,0 +1,37 @@
+# Secrets - never commit
+kaggle.json
+*.token
+.env
+
+# Datasets and generated audio (live on Google Drive)
+*.flac
+*.wav
+*.zip
+*.tar.gz
+asvspoof2019/
+MS-SNSD/
+RIRS_NOISES/
+generated/
+aasist/
+pretrained_enhance/
+
+# Model checkpoints and raw scores (live on Google Drive)
+*.pth
+*.pt
+*.ckpt
+checkpoints/
+scores/
+exp_result/
+
+# Python / notebooks
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+venv/
+.venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

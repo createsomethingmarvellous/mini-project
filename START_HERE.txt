@@ -1,0 +1,65 @@
+QUICK START
+===========
+
+Everything runs in Google Colab. Nothing needs to be installed on your PC.
+
+1. GIT (task T0) - one person, once
+   Open a terminal in this folder and run:
+       git init
+       git add .
+       git commit -m "setup: initial project scaffold"
+   Create a PRIVATE GitHub repo, push, and add the teammates.
+
+2. SETUP (tasks T1-T5, T6a) - one person, once
+   Upload notebooks/01_setup.ipynb to Google Colab and run it top to
+   bottom. It puts everything in Google Drive under MyDrive/mini_project/.
+   The project needs about 20 GB of Drive space.
+
+3. THE EXPERIMENT - in this order
+   04_evaluate.ipynb    T7: sanity check (Model A must give ~0.83% EER)
+   02_build_data.ipynb  T6, T9, T12: noisy, training and enhanced audio
+   03_train.ipynb       T10, T14: train Model B (resumes after disconnects)
+   04_evaluate.ipynb    T8, T11, T13, T15: score everything, make tables
+
+4. Read GUIDE.md - it has the task board. Claim a task before you start it.
+
+
+USING CLAUDE CODE?
+==================
+Open Claude Code in this folder. CLAUDE.md is loaded automatically and
+carries the project context. Say for example:
+    "Read GUIDE.md and DECISIONS.md, then help me with task T10."
+
+
+WHAT IS IN HERE
+===============
+README.md        Short project overview
+GUIDE.md         Context + task board + steps per task   <- MAIN FILE
+DECISIONS.md     Decisions log (the adopted plan is recorded there)
+.gitignore       Stops datasets/checkpoints/kaggle.json being committed
+
+notebooks/       01_setup, 02_build_data, 03_train, 04_evaluate
+scripts/
+  config.py               ALL parameters - change values here only
+  common.py               shared helpers (paths, protocols, audio I/O)
+  aasist_bridge.py        uses AASIST's own model/data/EER code
+  setup_aasist.py         T5  one-line NumPy fix for AASIST
+  make_eval_subset.py     T6a fixed 10k test subset
+  build_noisy_set.py      T6 noisy test sets, T9 augmented training set
+  build_enhanced_set.py   T12 enhanced test sets
+  copy_to_local.py        speeds up training (Drive -> Colab disk)
+  train_model.py          T10/T14 train Model B (or clean control C)
+  run_eval.py             T7/T8/T11/T13 score a model
+  summarize_results.py    T15 result tables
+configs/         eval_subset_10k.txt (created in T6a)
+results/         result tables (small files only)
+docs/            literature survey, synopsis, report
+
+
+BEFORE YOU RUN ANYTHING
+=======================
+- Nothing here has been run on real data yet. Expect small fixes on
+  the first run (especially the dataset layout check in notebook 01).
+- Always run builders with --limit 20 first.
+- If Colab disconnects, just rerun the same cell: finished files are
+  skipped and training resumes from its last checkpoint.

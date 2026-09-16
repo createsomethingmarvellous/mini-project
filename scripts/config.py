@@ -1,0 +1,140 @@
+"""
+Central configuration for the whole project.
+
+Every script imports from here so that parameters live in ONE place.
+If you change a value here, it changes everywhere - do not hardcode
+these numbers inside individual scripts.
+
+Decisions referenced below (B9, B10, ...) are recorded in DECISIONS.md.
+"""
+
+import os
+from pathlib import Path
+
+# ----------------------------------------------------------------------
+# PATHS
+# On Colab everything lives under Google Drive so a disconnect does not
+# lose work. For a local dry run, set the environment variable MP_BASE.
+# ----------------------------------------------------------------------
+BASE = Path(os.environ.get("MP_BASE", "/content/drive/MyDrive/mini_project"))
+
+# Training reads thousands of files per epoch, which is slow from Drive.
+# Notebook 03 copies the training data to Colab's local disk and sets
+# MP_DATA to that copy. Everything else (outputs) stays on Drive.
+DATA_BASE = Path(os.environ.get("MP_DATA", BASE))
+
+# Downloaded inputs (tasks T2-T5)
+ASVSPOOF_DIR = DATA_BASE / "asvspoof2019"   # searched automatically for the LA folder
+MSSNSD_DIR = BASE / "MS-SNSD"
+RIRS_DIR = BASE / "RIRS_NOISES"
+AASIST_DIR = BASE / "aasist"
+MODEL_A_WEIGHTS = AASIST_DIR / "models" / "weights" / "AASIST.pth"
+
+# Train and test noise are kept apart, so Model B never hears a test noise.
+NOISE_TRAIN_DIR = MSSNSD_DIR / "noise_train"
+NOISE_TEST_DIR = MSSNSD_DIR / "noise_test"
+RIR_DIR = RIRS_DIR / "simulated_rirs"
+
+# Generated data
+GENERATED_DIR = BASE / "generated"
+EVAL_CONDITIONS_DIR = GENERATED_DIR / "eval"    # eval/<condition>/flac/*.flac
+TRAIN_AUG_DIR = DATA_BASE / "generated" / "train_aug"   # flac/*.flac + protocol
+
+# Outputs
+CHECKPOINT_DIR = BASE / "checkpoints"           # checkpoints/<tag>/...
+SCORES_DIR = BASE / "scores"                    # scores/<tag>/<condition>.txt
+REPO_DIR = Path(__file__).resolve().parent.parent
+RESULTS_DIR = REPO_DIR / "results"              # small summary tables (committed)
+
+# Fixed eval subset shared by the whole team (commit this file once made)
+EVAL_SUBSET_FILE = REPO_DIR / "configs" / "eval_subset_10k.txt"
+
+# ----------------------------------------------------------------------
+# AUDIO
+# ----------------------------------------------------------------------
+SAMPLE_RATE = 16000     # ASVspoof and AASIST both expect 16 kHz
+
+# ----------------------------------------------------------------------
+# DATA SEED
+# One fixed seed for everything that builds DATA (subset choice, noise
+# draws). Training seeds (SEEDS below) only change model training, so all
+# three Model B runs see exactly the same augmented data.
+# ----------------------------------------------------------------------
+DATA_SEED = 42
+
+# ----------------------------------------------------------------------
+# TEST SETS  (decisions B10, E28)
+# Clean test uses the FULL eval set (compare with published 0.83%).
+# Noisy / enhanced tests use a fixed 10k subset at three fixed SNRs.
+# ----------------------------------------------------------------------
+EVAL_SUBSET_SIZE = 10_000
+EVAL_SNRS_DB = [0, 10, 20]      # same levels as Paper 1
+REVERB_PROBABILITY = 0.7        # fraction of test clips that also get room echo
+
+# ----------------------------------------------------------------------
+# TRAINING DATA  (decision B9)
+# 10% of the training files, 3 degraded copies each (+30% data):
+#   _n  = background noise only (random SNR in the range below)
+#   _r  = room echo only
+#   _nr = room echo + background noise
+# A lighter recipe inspired by Ali et al. (Paper 1), who made 9 copies.
+# ----------------------------------------------------------------------
+AUGMENT_FRACTION = 0.10
+AUG_COPIES = ["n", "r", "nr"]
+TRAIN_SNR_MIN_DB = 0
+TRAIN_SNR_MAX_DB = 20
+
+# ----------------------------------------------------------------------
+# TRAINING  (decisions B12, B15, E29)
+# ----------------------------------------------------------------------
+# B12: batch 16, not AASIST's default 24 (free Colab T4 has no margin).
+# Fallback ladder if out of memory: 16 -> 12 -> switch to AASIST-L.
+BATCH_SIZE = 16
+
+# E29: AASIST's default is 100. Time one epoch first (train_model.py prints
+# it). If 100 x 3 seeds does not fit, lower this AND train the clean
+# control model (tag C) with the same value.
+NUM_EPOCHS = 100
+
+# Training progress is saved this often (minutes), even mid-epoch, so a
+# Colab disconnect loses at most this much work.
+SAVE_EVERY_MINUTES = 10
+
+# B15: fixed seeds. Do not change once T14 has started.
+SEEDS = [42, 123, 2024]
+
+# ----------------------------------------------------------------------
+# EVALUATION  (decision B16)
+# ----------------------------------------------------------------------
+EER_TOLERANCE_PP = 0.5
+AASIST_PUBLISHED_EER = 0.83
+
+# ----------------------------------------------------------------------
+# SPEECH ENHANCEMENT MODELS  (decision B11)
+# MetricGAN+ is required. The second enhancer is SEGAN+ if its weights
+# can be obtained within one session; otherwise SepFormer (listed here).
+# ----------------------------------------------------------------------
+ENHANCEMENT_MODELS = {
+    "metricgan": "speechbrain/metricgan-plus-voicebank",
+    "sepformer": "speechbrain/sepformer-wham16k-enhancement",
+}
+
+
+def eval_conditions():
+    """Every test condition name, in table order."""
+    names = ["clean", "clean_subset"]
+    names += [f"noisy_snr{s}" for s in EVAL_SNRS_DB]
+    for enh in ENHANCEMENT_MODELS:
+        names += [f"{enh}_snr{s}" for s in EVAL_SNRS_DB]
+    return names
+
+
+if __name__ == "__main__":
+    print("Project configuration")
+    print(f"  Base path:         {BASE}")
+    print(f"  Eval subset:       {EVAL_SUBSET_SIZE} files, SNRs {EVAL_SNRS_DB} dB")
+    print(f"  Train augment:     {AUGMENT_FRACTION:.0%} x {len(AUG_COPIES)} copies")
+    print(f"  Batch / epochs:    {BATCH_SIZE} / {NUM_EPOCHS}")
+    print(f"  Seeds:             {SEEDS}")
+    print(f"  Enhancers:         {list(ENHANCEMENT_MODELS)}")
+    print(f"  Conditions:        {eval_conditions()}")
