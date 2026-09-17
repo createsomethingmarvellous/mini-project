@@ -16,6 +16,7 @@ Usage (in Colab):
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -59,12 +60,15 @@ def main():
             continue
         rows = eval_rows_for(cond)
         base = condition_dir(cond)
-        missing = [r[1] for r in rows if not (base / "flac" / f"{r[1]}.flac").exists()]
+        flac_dir = base / "flac"
+        have = set(os.listdir(flac_dir)) if flac_dir.exists() else set()  # one Drive listing, fast
+        missing = [r[1] for r in rows if f"{r[1]}.flac" not in have]
         if missing:
             print(f"  {cond:<16} SKIPPED - {len(missing)} of {len(rows)} files not built yet")
             continue
         loader = ab.eval_loader(rows, base, conf["batch_size"])
-        eer = ab.write_scores(model, loader, rows, out, device)
+        print(f"  {cond:<16} scoring {len(rows)} files ...", flush=True)
+        eer = ab.write_scores(model, loader, rows, out, device, progress=True)
         print(f"  {cond:<16} EER = {eer:6.3f}%   ({len(rows)} files)")
 
         if tag == "A" and cond == "clean":

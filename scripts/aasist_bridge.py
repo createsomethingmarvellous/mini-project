@@ -22,6 +22,7 @@ from data_utils import Dataset_ASVspoof2019_devNeval, pad_random  # noqa: E402
 from evaluation import compute_eer  # noqa: E402  (official EER code)
 
 import soundfile as sf  # noqa: E402
+from tqdm import tqdm  # noqa: E402
 
 
 def load_aasist_config() -> dict:
@@ -63,12 +64,14 @@ def eval_loader(rows: list, base_dir: Path, batch_size: int):
                                        pin_memory=True)
 
 
-def write_scores(model, loader, rows: list, out_path: Path, device: str) -> float:
+def write_scores(model, loader, rows: list, out_path: Path, device: str,
+                 progress: bool = False) -> float:
     """Score every file; write AASIST-format lines (utt src key score); return EER %."""
     model.eval()
     scores = []
+    batches = tqdm(loader, desc="scoring", unit="batch", mininterval=10) if progress else loader
     with torch.no_grad():
-        for batch_x, _ in loader:
+        for batch_x, _ in batches:
             _, out = model(batch_x.to(device))
             scores.extend(out[:, 1].cpu().numpy().ravel().tolist())
     assert len(scores) == len(rows)
