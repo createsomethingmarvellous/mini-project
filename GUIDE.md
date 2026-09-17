@@ -81,9 +81,9 @@ Claim a task by editing the **Owner** column and status, committing just that ch
 |----|------|----------|--------|-------|------------|
 | T0 | Git & GitHub team setup | — | ✅ Done | Anup | none |
 | T1 | Colab environment setup | 01 | ✅ Done | Anup | T0 |
-| T2 | Download ASVspoof 2019 LA | 01 | 🟡 Redo as Drive archive (new fast-data setup) | Anup | T1 |
-| T3 | Download MS-SNSD (noise) | 01 | 🟡 Redo as Drive archive (new fast-data setup) | Anup | T1 |
-| T4 | Download RIRS_NOISES (reverb) | 01 | 🟡 Redo as Drive archive (new fast-data setup) | Anup | T1 |
+| T2 | Download ASVspoof 2019 LA | 01 | ✅ Done | Anup | T1 |
+| T3 | Download MS-SNSD (noise) | 01 | ✅ Done | Anup | T1 |
+| T4 | Download RIRS_NOISES (reverb) | 01 | ✅ Done | Anup | T1 |
 | T5 | Get AASIST code + pretrained checkpoint (Model A) | 01 | ✅ Done | Anup | T1 |
 | T6a | Choose the fixed 10k test subset (once, then commit) | 01 | ✅ Done | Anup | T2 |
 | T6 | Build the noisy test sets (0/10/20 dB) | 02 | 🟢 Ready | | T3, T4, T6a |
