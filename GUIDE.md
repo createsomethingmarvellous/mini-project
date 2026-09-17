@@ -87,7 +87,7 @@ Claim a task by editing the **Owner** column and status, committing just that ch
 | T5 | Get AASIST code + pretrained checkpoint (Model A) | 01 | ✅ Done | Anup | T1 |
 | T6a | Choose the fixed 10k test subset (once, then commit) | 01 | ✅ Done | Anup | T2 |
 | T6 | Build the noisy test sets (0/10/20 dB) | 02 | 🟢 Ready | | T3, T4, T6a |
-| T7 | Sanity-check Model A on the full clean test set | 04 | 🟢 Ready | | T2, T5 |
+| T7 | Sanity-check Model A on the full clean test set (EER 0.830%, published 0.83% ✔) | 04 | ✅ Done | Anup | T2, T5 |
 | T8 | Test Model A on noisy sets — cells ① ② | 04 | 🔒 Blocked | | T6, T7 |
 | T9 | Build the noise-augmented training set | 02 | 🟢 Ready | | T2, T3, T4 |
 | T10 | Train Model B (seed 42) — time the first epoch! | 03 | 🔒 Blocked | | T9 |
