@@ -23,6 +23,8 @@ Never paste a token into a notebook cell, a chat or a file.
 - **First time (before the repo is on Drive):** colab.research.google.com → File → Open notebook → **GitHub** tab → `createsomethingmarvellous/mini-project` → `notebooks/01_setup.ipynb`.
 - **After that:** Google Drive → `mini_project/repo/notebooks/` → double-click the notebook → **Open with Google Colab**.
 - **Every time:** Runtime → Change runtime type → **GPU** → Save. Then run the **first code cell** before anything else.
+- **Before closing the tab or changing the runtime:** run the **last cell** of the notebook (*save to Drive*). Colab uploads new files in the background, and anything not yet uploaded is lost when the session ends.
+- **Don't use File → Save a copy in GitHub.** The notebooks on GitHub are the clean versions everyone runs; saving over them mixes in old cells and outputs. (Anup's first setup run is kept for reference in `notebooks/logs/`.)
 
 ---
 
@@ -100,6 +102,7 @@ Only Anup commits from Colab.
 | "No ASVspoof2019_LA_cm_protocols folder" | Step 1's download or unzip didn't finish; rerun those cells |
 | Clone fails with `403` / "Write access to repository not granted" | The token can't access this repo. Edit it on GitHub (Repository access: `mini-project`; Contents: **Read and write**), update the `GITHUB_TOKEN` secret if the token changed, then rerun the cell |
 | `git push` failed in a cell | Check the two Colab secrets (Part 0.3); results are still saved on Drive |
+| Files or folders missing in a new session (e.g. `MS-SNSD`, `RIRS_NOISES`, "AASIST code not found") | The previous session ended before Drive finished uploading. If that tab is still open, run its last cell (*save to Drive*); otherwise rerun the step that created them |
 | Any other error | Copy the full red error text and ask for help; don't change settings mid-way |
 
 **Never change `scripts/config.py` in the middle of the experiment** without telling the team and noting it in `DECISIONS.md`.
