@@ -18,6 +18,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from tqdm import tqdm
+
 if os.environ.get("MP_DATA"):
     sys.exit("Unset MP_DATA before copying (the source must be Drive).")
 
@@ -32,10 +34,13 @@ def copy_tree(src: Path, dst: Path):
     if not src.exists():
         print(f"  skip (not found): {src}")
         return
-    print(f"  {src} -> {dst}")
-    shutil.copytree(src, dst, dirs_exist_ok=True,
-                    copy_function=lambda s, d: None if Path(d).exists()
-                    else shutil.copy2(s, d))
+    files = [p for p in src.rglob("*") if p.is_file()]
+    todo = [p for p in files if not (dst / p.relative_to(src)).exists()]
+    print(f"  {src.name}: {len(files)} files, {len(todo)} to copy")
+    for p in tqdm(todo, desc=src.name, unit="file", mininterval=5):
+        target = dst / p.relative_to(src)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(p, target)
 
 
 def main():

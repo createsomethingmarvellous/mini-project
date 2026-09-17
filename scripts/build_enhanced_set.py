@@ -78,7 +78,7 @@ def main():
                      "python scripts/build_noisy_set.py --mode eval")
 
         failed = skipped = 0
-        for row in tqdm(rows, desc=f"{args.model}_snr{snr}"):
+        for row in tqdm(rows, desc=f"{args.model}_snr{snr}", unit="file", mininterval=5):
             out = out_dir / f"{row[1]}.flac"
             if out.exists():
                 skipped += 1

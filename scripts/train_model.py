@@ -19,12 +19,14 @@ Just run the same command again after a disconnect - it resumes.
 """
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
 
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).parent))
 import config
@@ -43,8 +45,9 @@ def training_files(clean_only: bool):
             sys.exit("ERROR: augmented training set missing. Run T9 first: "
                      "python scripts/build_noisy_set.py --mode train")
         aug_rows = read_protocol(aug_protocol)
-        missing = [r[1] for r in aug_rows
-                   if not (config.TRAIN_AUG_DIR / "flac" / f"{r[1]}.flac").exists()]
+        aug_flac = config.TRAIN_AUG_DIR / "flac"
+        have = set(os.listdir(aug_flac)) if aug_flac.exists() else set()
+        missing = [r[1] for r in aug_rows if f"{r[1]}.flac" not in have]
         if missing:
             sys.exit(f"ERROR: {len(missing)} augmented files not built yet "
                      f"(e.g. {missing[0]}). Re-run T9 until it finishes.")
@@ -145,7 +148,10 @@ def main():
     for epoch in range(state["epoch"], conf["num_epochs"]):
         start, minutes_before = time.time(), state["minutes"]
         model.train()
-        for batch_x, batch_y in epoch_loader(epoch, state["batch"]):
+        bar = tqdm(epoch_loader(epoch, state["batch"]), desc=f"epoch {epoch}",
+                   total=batches_per_epoch, initial=state["batch"],
+                   unit="batch", mininterval=30)
+        for batch_x, batch_y in bar:
             batch_x = batch_x.to(device)
             batch_y = batch_y.view(-1).long().to(device)
             _, out = model(batch_x, Freq_aug=False)
@@ -162,11 +168,12 @@ def main():
                 state["minutes"] = minutes_before + (time.time() - start) / 60
                 save_checkpoint()
                 last_save = time.time()
-                print(f"  saved: epoch {epoch}, batch {state['batch']}/{batches_per_epoch}")
+                tqdm.write(f"  saved: epoch {epoch}, batch {state['batch']}/{batches_per_epoch}")
 
         minutes = minutes_before + (time.time() - start) / 60
+        bar.close()
         dev_eer = ab.write_scores(model, dev_loader, dev_rows,
-                                  run_dir / "dev_scores.txt", device)
+                                  run_dir / "dev_scores.txt", device, progress=True)
         if dev_eer <= state["best_dev_eer"]:
             state["best_dev_eer"] = dev_eer
             state["swa"] = average_into(state["swa"], model.state_dict(), state["n_swa"])
@@ -191,7 +198,9 @@ def main():
         model.load_state_dict(state["swa"])
         bn_loader = torch.utils.data.DataLoader(train_set, batch_size=bs,
                                                 num_workers=args.workers)
-        torch.optim.swa_utils.update_bn(bn_loader, model, device=device)
+        print("Building the final SWA model (one pass over the training data) ...")
+        torch.optim.swa_utils.update_bn(tqdm(bn_loader, desc="final SWA", unit="batch",
+                                             mininterval=30), model, device=device)
         torch.save(model.state_dict(), run_dir / "swa.pth")
     print(f"Done. Final model: {run_dir / 'swa.pth'}")
 

@@ -52,7 +52,7 @@ def check_inputs(*paths):
 def process(jobs, desc):
     """jobs: list of (seed, src_path, out_path, augmenter)."""
     failed = skipped = 0
-    for seed, src, out, augment in tqdm(jobs, desc=desc):
+    for seed, src, out, augment in tqdm(jobs, desc=desc, unit='file', mininterval=5):
         if out.exists():
             skipped += 1
             continue

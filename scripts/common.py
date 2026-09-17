@@ -24,7 +24,13 @@ def la_root() -> Path:
     Found by searching, because the Kaggle mirror nests folders differently
     from the official download.
     """
-    hits = sorted(config.ASVSPOOF_DIR.rglob("ASVspoof2019_LA_cm_protocols"))
+    # Look only a few folder levels deep: scanning every audio file on Drive is slow.
+    name = "ASVspoof2019_LA_cm_protocols"
+    hits = []
+    for depth in range(4):
+        hits = sorted(config.ASVSPOOF_DIR.glob("/".join(["*"] * depth + [name])))
+        if hits:
+            break
     if not hits:
         sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under "
                  f"{config.ASVSPOOF_DIR}. Finish T2 first.")
