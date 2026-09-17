@@ -64,6 +64,10 @@ docs/        literature survey, synopsis, report
   limited to syntax checks (`python -m py_compile`).
 - **Datasets, generated audio, checkpoints and raw scores are NEVER committed.**
   They live on Google Drive under `MyDrive/mini_project/`. `.gitignore` covers this.
+- **Audio is never read from Drive file-by-file** (far too slow). It is stored
+  as one tar per dataset in `MyDrive/mini_project/archives/` and unpacked to
+  `/content/fast` each session by `scripts/fast_data.py`; `config.DATA_BASE`
+  switches to that local copy automatically.
 - **`kaggle.json` must never be committed.**
 - Batch size 16. Fallback ladder on OOM: 16 -> 12 -> AASIST-L.
 - Audio is 16 kHz FLAC, in AASIST's `<dir>/flac/<utt_id>.flac` layout.

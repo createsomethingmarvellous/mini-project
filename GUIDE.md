@@ -81,9 +81,9 @@ Claim a task by editing the **Owner** column and status, committing just that ch
 |----|------|----------|--------|-------|------------|
 | T0 | Git & GitHub team setup | — | ✅ Done | Anup | none |
 | T1 | Colab environment setup | 01 | ✅ Done | Anup | T0 |
-| T2 | Download ASVspoof 2019 LA | 01 | ✅ Done | Anup | T1 |
-| T3 | Download MS-SNSD (noise) | 01 | ✅ Done | Anup | T1 |
-| T4 | Download RIRS_NOISES (reverb) | 01 | ✅ Done | Anup | T1 |
+| T2 | Download ASVspoof 2019 LA | 01 | 🟡 Redo as Drive archive (new fast-data setup) | Anup | T1 |
+| T3 | Download MS-SNSD (noise) | 01 | 🟡 Redo as Drive archive (new fast-data setup) | Anup | T1 |
+| T4 | Download RIRS_NOISES (reverb) | 01 | 🟡 Redo as Drive archive (new fast-data setup) | Anup | T1 |
 | T5 | Get AASIST code + pretrained checkpoint (Model A) | 01 | ✅ Done | Anup | T1 |
 | T6a | Choose the fixed 10k test subset (once, then commit) | 01 | ✅ Done | Anup | T2 |
 | T6 | Build the noisy test sets (0/10/20 dB) | 02 | 🟢 Ready | | T3, T4, T6a |
@@ -134,15 +134,22 @@ Rules:
   - per-attack table;
   - Model B values as mean ± std over its 3 seeds.
 
-### Where things are stored (Google Drive: `MyDrive/mini_project/`)
+### Where things are stored
+Google Drive is very slow with thousands of small audio files, so audio is **worked on in Colab's fast local disk** (`/content/fast`) and **kept on Drive as one archive per dataset**. Every notebook's first cell unpacks the archives (`scripts/fast_data.py unpack`); after building new audio, a `pack` cell stores it back on Drive.
+
+Google Drive (`MyDrive/mini_project/`), permanent:
 ```
-repo/                       <- this Git repo (cloned in notebook 01)
-asvspoof2019/  MS-SNSD/  RIRS_NOISES/  aasist/     <- downloads (T2-T5)
-generated/eval/<condition>/flac/                   <- noisy_snr0 ... sepformer_snr20 (T6, T12)
-generated/train_aug/flac/ + protocol_aug.txt       <- augmented copies (T9)
+repo/                         <- this Git repo (cloned in notebook 01)
+aasist/                       <- AASIST code + Model A weights (T5)
+archives/asvspoof.tar         <- ASVspoof 2019 LA (T2)
+archives/noise.tar            <- MS-SNSD noise + simulated room echo (T3, T4)
+archives/eval_noisy.tar       <- noisy test sets (T6)
+archives/eval_metricgan.tar, eval_sepformer.tar   <- cleaned test sets (T12)
+archives/train_aug.tar        <- noisy training copies (T9)
 checkpoints/B_seed42/  (last_checkpoint.pth, best_dev.pth, swa.pth, log.txt)   <- T10/T14
-scores/<model>/<condition>.txt                     <- T7-T14
+scores/<model>/<condition>.txt                    <- T7-T14
 ```
+Colab local disk (`/content/fast/`), wiped when the session ends: the unpacked audio, same folder names as inside the archives.
 Only `repo/` goes to GitHub. Tables land in `repo/results/`.
 
 ### T0 — Git & GitHub Team Setup
@@ -184,7 +191,7 @@ Run notebook 01 top to bottom **once**, in the Drive account that will hold the 
 ### T10 — Train Model B (notebook 03)
 `scripts/train_model.py --tag B --seed 42`.
 - Uses AASIST's own recipe, with batch size 16.
-- Copies the training data to Colab's local disk first, for speed.
+- Reads all audio from Colab's fast local disk (unpacked by the notebook's first cell).
 - Saves its progress every 10 minutes, even mid-epoch (`SAVE_EVERY_MINUTES`). **After a disconnect, rerun the notebook and it continues from the last save.**
 - **Time the first epoch.** The log shows minutes per epoch and hours left. If 100 epochs × 3 seeds won't fit before the buffer deadline, lower `NUM_EPOCHS` in `scripts/config.py`, restart this seed, and plan to train model C with the same setting (decision E29).
 

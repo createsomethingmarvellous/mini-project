@@ -52,6 +52,9 @@ def main():
     model = ab.build_model(conf["model_config"], device)
     model.load_state_dict(torch.load(weights, map_location=device))
     print(f"Model {tag} loaded from {weights}")
+    print(f"Reading audio from {config.DATA_BASE}"
+          + ("" if config.DATA_BASE == config.LOCAL_DATA else
+             "  (Drive - slow! run: python scripts/fast_data.py unpack)"))
 
     for cond in args.conditions:
         out = config.SCORES_DIR / tag / f"{cond}.txt"
@@ -66,7 +69,7 @@ def main():
         if missing:
             print(f"  {cond:<16} SKIPPED - {len(missing)} of {len(rows)} files not built yet")
             continue
-        loader = ab.eval_loader(rows, base, conf["batch_size"])
+        loader = ab.eval_loader(rows, base)
         print(f"  {cond:<16} scoring {len(rows)} files ...", flush=True)
         eer = ab.write_scores(model, loader, rows, out, device, progress=True)
         print(f"  {cond:<16} EER = {eer:6.3f}%   ({len(rows)} files)")

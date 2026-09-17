@@ -48,7 +48,7 @@ scripts/
   make_eval_subset.py     T6a fixed 10k test subset
   build_noisy_set.py      T6 noisy test sets, T9 augmented training set
   build_enhanced_set.py   T12 enhanced test sets
-  copy_to_local.py        speeds up training (Drive -> Colab disk)
+  fast_data.py            pack/unpack audio archives (Drive <-> fast Colab disk)
   train_model.py          T10/T14 train Model B (or clean control C)
   run_eval.py             T7/T8/T11/T13 score a model
   summarize_results.py    T15 result tables

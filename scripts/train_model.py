@@ -77,7 +77,7 @@ def main():
     parser.add_argument("--seed", type=int, choices=config.SEEDS, required=True)
     parser.add_argument("--clean", action="store_true",
                         help="train on clean data only (use with --tag C)")
-    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--workers", type=int, default=config.NUM_WORKERS)
     args = parser.parse_args()
     if (args.tag == "C") != args.clean:
         sys.exit("Use --clean exactly when --tag C.")
@@ -112,7 +112,10 @@ def main():
             worker_init_fn=seed_worker, generator=gen)
 
     dev_rows = read_protocol(protocol_path("dev"))
-    dev_loader = ab.eval_loader(dev_rows, split_dir("dev"), bs)
+    dev_loader = ab.eval_loader(dev_rows, split_dir("dev"))
+    if config.DATA_BASE != config.LOCAL_DATA:
+        print("WARNING: reading audio from Drive (slow). Run "
+              "'python scripts/fast_data.py unpack' first.")
     print(f"Training files: {len(paths)}  |  dev files: {len(dev_rows)}  |  "
           f"{batches_per_epoch} batches per epoch")
 

@@ -22,7 +22,7 @@ Never paste a token into a notebook cell, a chat or a file.
 
 - **First time (before the repo is on Drive):** colab.research.google.com → File → Open notebook → **GitHub** tab → `createsomethingmarvellous/mini-project` → `notebooks/01_setup.ipynb`.
 - **After that:** Google Drive → `mini_project/repo/notebooks/` → double-click the notebook → **Open with Google Colab**.
-- **Every time:** Runtime → Change runtime type → **GPU** → Save. Then run the **first code cell** before anything else.
+- **Every time:** Runtime → Change runtime type → **GPU** → Save. Then run the **first code cell** before anything else. It also unpacks the audio archives from Drive to Colab's fast local disk (a few minutes); all work then runs from there.
 - **Before closing the tab or changing the runtime:** run the **last cell** of the notebook (*save to Drive*). Colab uploads new files in the background, and anything not yet uploaded is lost when the session ends.
 - **Don't use File → Save a copy in GitHub.** The notebooks on GitHub are the clean versions everyone runs; saving over them mixes in old cells and outputs. (Anup's first setup run is kept for reference in `notebooks/logs/`.)
 
@@ -51,6 +51,8 @@ Run the cells in order. Each builder runs as a **20-file test first**, then in f
 1. Noisy test audio (T6): 3 × 10,000 files. Listen to the sample cell once.
 2. Noisy training audio (T9): about 7,600 files.
 3. Cleaned audio with MetricGAN+ (T12), then with SepFormer.
+
+**Run each `pack` cell right after its build finishes.** The audio is built on Colab's local disk, which is wiped when the session ends; `pack` stores it on Drive.
 
 ✅ **Done when** each count cell shows 10,000 (test sets) and "files built = expected" (training set).
 💡 If Colab disconnects, run the same cell again: finished files are skipped.
@@ -102,6 +104,8 @@ Only Anup commits from Colab.
 | "No ASVspoof2019_LA_cm_protocols folder" | Step 1's download or unzip didn't finish; rerun those cells |
 | Clone fails with `403` / "Write access to repository not granted" | The token can't access this repo. Edit it on GitHub (Repository access: `mini-project`; Contents: **Read and write**), update the `GITHUB_TOKEN` secret if the token changed, then rerun the cell |
 | `git push` failed in a cell | Check the two Colab secrets (Part 0.3); results are still saved on Drive |
+| "reading audio from Drive (slow)" warning, or very slow progress | The archives weren't unpacked: run `!python scripts/fast_data.py unpack` (the first cell does this) and check `!python scripts/fast_data.py status` |
+| "not enough local disk" | Runtime → Disconnect and delete runtime, reconnect, rerun the first cell |
 | Files or folders missing in a new session (e.g. `MS-SNSD`, `RIRS_NOISES`, "AASIST code not found") | The previous session ended before Drive finished uploading. If that tab is still open, run its last cell (*save to Drive*); otherwise rerun the step that created them |
 | Any other error | Copy the full red error text and ask for help; don't change settings mid-way |
 

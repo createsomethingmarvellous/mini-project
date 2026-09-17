@@ -56,12 +56,13 @@ class TrainSet(torch.utils.data.Dataset):
         return Tensor(pad_random(x, self.cut)), self.labels[key]
 
 
-def eval_loader(rows: list, base_dir: Path, batch_size: int):
+def eval_loader(rows: list, base_dir: Path, batch_size: int = config.EVAL_BATCH_SIZE):
+    """Scoring loader. Batch size doesn't change scores (eval mode), only speed."""
     keys = [r[1] for r in rows]
     dataset = Dataset_ASVspoof2019_devNeval(list_IDs=keys, base_dir=base_dir)
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                                       shuffle=False, num_workers=2,
-                                       pin_memory=True)
+                                       shuffle=False, num_workers=config.NUM_WORKERS,
+                                       pin_memory=True, persistent_workers=False)
 
 
 def write_scores(model, loader, rows: list, out_path: Path, device: str,
@@ -72,7 +73,11 @@ def write_scores(model, loader, rows: list, out_path: Path, device: str,
     batches = tqdm(loader, desc="scoring", unit="batch", mininterval=10) if progress else loader
     with torch.no_grad():
         for batch_x, _ in batches:
-            _, out = model(batch_x.to(device))
+            try:
+                _, out = model(batch_x.to(device))
+            except torch.cuda.OutOfMemoryError:
+                raise SystemExit("CUDA out of memory while scoring: lower "
+                                 "EVAL_BATCH_SIZE in scripts/config.py and rerun.")
             scores.extend(out[:, 1].cpu().numpy().ravel().tolist())
     assert len(scores) == len(rows)
 

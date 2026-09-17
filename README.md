@@ -43,7 +43,7 @@ Full background, the research papers this builds on, and the complete task break
 └── docs/             <- literature survey, synopsis, report
 ```
 
-**Everything runs in Google Colab.** Data, generated audio and checkpoints live on Google Drive (`MyDrive/mini_project/`), never in Git. See `START_HERE.txt` for the run order.
+**Everything runs in Google Colab.** Data, generated audio and checkpoints live on Google Drive (`MyDrive/mini_project/`, audio as one archive per dataset), never in Git; each session unpacks the audio to Colab's fast local disk. See `START_HERE.txt` for the run order.
 
 ## Git Workflow (short version — full detail in `GUIDE.md`)
 

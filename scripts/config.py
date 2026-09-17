@@ -13,20 +13,28 @@ from pathlib import Path
 
 # ----------------------------------------------------------------------
 # PATHS
-# On Colab everything lives under Google Drive so a disconnect does not
-# lose work. For a local dry run, set the environment variable MP_BASE.
+# Two places:
+#   BASE      = Google Drive (permanent): code, archives, checkpoints, scores
+#   DATA_BASE = where audio is read/written. Drive is very slow with many
+#               small files, so once scripts/fast_data.py has unpacked the
+#               archives to Colab's local disk, everything uses that copy.
+# For a local dry run, set MP_BASE (and optionally MP_DATA).
 # ----------------------------------------------------------------------
 BASE = Path(os.environ.get("MP_BASE", "/content/drive/MyDrive/mini_project"))
+LOCAL_DATA = Path("/content/fast")
+ARCHIVE_DIR = BASE / "archives"                 # one .tar per dataset (fast_data.py)
 
-# Training reads thousands of files per epoch, which is slow from Drive.
-# Notebook 03 copies the training data to Colab's local disk and sets
-# MP_DATA to that copy. Everything else (outputs) stays on Drive.
-DATA_BASE = Path(os.environ.get("MP_DATA", BASE))
+if os.environ.get("MP_DATA"):
+    DATA_BASE = Path(os.environ["MP_DATA"])
+elif (LOCAL_DATA / "asvspoof2019").exists():
+    DATA_BASE = LOCAL_DATA                      # unpacked this session: fast
+else:
+    DATA_BASE = BASE                            # fallback: files directly on Drive (slow)
 
 # Downloaded inputs (tasks T2-T5)
 ASVSPOOF_DIR = DATA_BASE / "asvspoof2019"   # searched automatically for the LA folder
-MSSNSD_DIR = BASE / "MS-SNSD"
-RIRS_DIR = BASE / "RIRS_NOISES"
+MSSNSD_DIR = DATA_BASE / "MS-SNSD"
+RIRS_DIR = DATA_BASE / "RIRS_NOISES"
 AASIST_DIR = BASE / "aasist"
 MODEL_A_WEIGHTS = AASIST_DIR / "models" / "weights" / "AASIST.pth"
 
@@ -35,10 +43,10 @@ NOISE_TRAIN_DIR = MSSNSD_DIR / "noise_train"
 NOISE_TEST_DIR = MSSNSD_DIR / "noise_test"
 RIR_DIR = RIRS_DIR / "simulated_rirs"
 
-# Generated data
-GENERATED_DIR = BASE / "generated"
+# Generated data (pack to Drive with fast_data.py after building)
+GENERATED_DIR = DATA_BASE / "generated"
 EVAL_CONDITIONS_DIR = GENERATED_DIR / "eval"    # eval/<condition>/flac/*.flac
-TRAIN_AUG_DIR = DATA_BASE / "generated" / "train_aug"   # flac/*.flac + protocol
+TRAIN_AUG_DIR = GENERATED_DIR / "train_aug"     # flac/*.flac + protocol_aug.txt
 
 # Outputs
 CHECKPOINT_DIR = BASE / "checkpoints"           # checkpoints/<tag>/...
@@ -91,6 +99,15 @@ TRAIN_SNR_MAX_DB = 20
 # Fallback ladder if out of memory: 16 -> 12 -> switch to AASIST-L.
 BATCH_SIZE = 16
 
+# Scoring only (no training): bigger batches use more of the GPU and give
+# identical scores, because AASIST scores each file independently in eval mode.
+# Batch 16 used ~3.7 GB on a T4; 48 uses roughly 10-11 GB of its 15 GB.
+# If you see "CUDA out of memory" while scoring, lower this (e.g. 32).
+EVAL_BATCH_SIZE = 48
+
+# CPU processes for loading audio and building noisy sets.
+NUM_WORKERS = max(2, min(8, os.cpu_count() or 2))
+
 # E29: AASIST's default is 100. Time one epoch first (train_model.py prints
 # it). If 100 x 3 seeds does not fit, lower this AND train the clean
 # control model (tag C) with the same value.
@@ -131,7 +148,10 @@ def eval_conditions():
 
 if __name__ == "__main__":
     print("Project configuration")
-    print(f"  Base path:         {BASE}")
+    print(f"  Base path (Drive): {BASE}")
+    print(f"  Audio read from:   {DATA_BASE}"
+          + ("   (fast local disk)" if DATA_BASE == LOCAL_DATA else "   (Drive - slow)"))
+    print(f"  CPU workers:       {NUM_WORKERS}")
     print(f"  Eval subset:       {EVAL_SUBSET_SIZE} files, SNRs {EVAL_SNRS_DB} dB")
     print(f"  Train augment:     {AUGMENT_FRACTION:.0%} x {len(AUG_COPIES)} copies")
     print(f"  Batch / epochs:    {BATCH_SIZE} / {NUM_EPOCHS}")
