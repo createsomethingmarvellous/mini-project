@@ -105,6 +105,9 @@ BATCH_SIZE = 16
 # If you see "CUDA out of memory" while scoring, lower this (e.g. 32).
 EVAL_BATCH_SIZE = 48
 
+# Speech enhancement inference batch size (uses ~12-13.5 GB VRAM on T4 GPU)
+ENHANCEMENT_BATCH_SIZE = 32
+
 # CPU processes for loading audio and building noisy sets.
 NUM_WORKERS = max(2, min(8, os.cpu_count() or 2))
 

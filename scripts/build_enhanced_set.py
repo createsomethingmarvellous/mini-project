@@ -64,8 +64,8 @@ def main():
                         required=True)
     parser.add_argument("--limit", type=int, default=None,
                         help="process only N files per SNR - test with this first")
-    parser.add_argument("--batch_size", type=int, default=32,
-                        help="batch size for GPU inference (default: 32)")
+    parser.add_argument("--batch_size", type=int, default=config.ENHANCEMENT_BATCH_SIZE,
+                        help=f"batch size for GPU inference (default: {config.ENHANCEMENT_BATCH_SIZE})")
     args = parser.parse_args()
 
     rows = eval_rows_for("noisy")[:args.limit]
