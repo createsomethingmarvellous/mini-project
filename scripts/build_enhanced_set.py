@@ -29,7 +29,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_enhancer(model_key: str):
-    """Return a function: 1-D float waveform tensor -> 1-D enhanced tensor."""
+    """Return a function: (batch_wavs [B, T], lengths [B]) -> batch_enhanced_tensor [B, T]."""
     try:
         from speechbrain.inference.enhancement import SpectralMaskEnhancement
         from speechbrain.inference.separation import SepformerSeparation
@@ -45,16 +45,15 @@ def load_enhancer(model_key: str):
     if model_key == "metricgan":
         model = SpectralMaskEnhancement.from_hparams(
             source=source, savedir=savedir, run_opts=run_opts)
-        return lambda wav: model.enhance_batch(
-            wav.unsqueeze(0).to(DEVICE),
-            lengths=torch.tensor([1.0], device=DEVICE))[0]
+        return lambda wavs, lengths: model.enhance_batch(
+            wavs.to(DEVICE), lengths=lengths.to(DEVICE))
 
     if model_key == "sepformer":
         model = SepformerSeparation.from_hparams(
             source=source, savedir=savedir, run_opts=run_opts)
         # output shape [batch, time, n_sources]; this model has 1 source
-        return lambda wav: model.separate_batch(
-            wav.unsqueeze(0).to(DEVICE))[0, :, 0]
+        return lambda wavs, lengths: model.separate_batch(
+            wavs.to(DEVICE))[:, :, 0]
 
     sys.exit(f"No loader written for {model_key}")
 
@@ -65,6 +64,8 @@ def main():
                         required=True)
     parser.add_argument("--limit", type=int, default=None,
                         help="process only N files per SNR - test with this first")
+    parser.add_argument("--batch_size", type=int, default=32,
+                        help="batch size for GPU inference (default: 32)")
     args = parser.parse_args()
 
     rows = eval_rows_for("noisy")[:args.limit]
@@ -77,27 +78,64 @@ def main():
             sys.exit(f"ERROR: {src_dir} missing. Run T6 first: "
                      "python scripts/build_noisy_set.py --mode eval")
 
-        failed = skipped = 0
-        for row in tqdm(rows, desc=f"{args.model}_snr{snr}", unit="file", mininterval=5):
+        todo = []
+        skipped = 0
+        for row in rows:
             out = out_dir / f"{row[1]}.flac"
             if out.exists():
                 skipped += 1
-                continue
-            try:
-                wav = torch.from_numpy(load_audio(src_dir / f"{row[1]}.flac"))
-                with torch.no_grad():
-                    enhanced = enhance(wav)
-                save_flac(out, enhanced.cpu().numpy())
-            except Exception as e:
-                failed += 1
-                if failed <= 5:
-                    print(f"\n  failed on {row[1]}: {e}")
+            else:
+                todo.append((src_dir / f"{row[1]}.flac", out))
 
-        print(f"{args.model}_snr{snr}: {len(rows) - failed - skipped} written, "
-              f"{skipped} already existed, {failed} failed")
+        failed = 0
+        written = 0
+        bs = args.batch_size
+
+        pbar = tqdm(total=len(rows), desc=f"{args.model}_snr{snr}", unit="file", mininterval=5)
+        pbar.update(skipped)
+
+        for i in range(0, len(todo), bs):
+            chunk = todo[i : i + bs]
+            try:
+                wavs = [load_audio(src) for src, _ in chunk]
+                max_len = max(len(w) for w in wavs)
+                batch_tensor = torch.zeros(len(wavs), max_len, dtype=torch.float32)
+                lengths_tensor = torch.tensor([len(w) / max_len for w in wavs], dtype=torch.float32)
+                for idx, w in enumerate(wavs):
+                    batch_tensor[idx, :len(w)] = torch.from_numpy(w)
+
+                with torch.no_grad():
+                    enhanced_batch = enhance(batch_tensor, lengths_tensor)
+
+                for idx, (src, out) in enumerate(chunk):
+                    orig_len = len(wavs[idx])
+                    save_flac(out, enhanced_batch[idx, :orig_len].cpu().numpy())
+                    written += 1
+                    pbar.update(1)
+
+            except Exception as e:
+                # Fallback to single-file processing if batch fails
+                for src, out in chunk:
+                    try:
+                        w = load_audio(src)
+                        b_t = torch.from_numpy(w).unsqueeze(0)
+                        l_t = torch.tensor([1.0], dtype=torch.float32)
+                        with torch.no_grad():
+                            enh = enhance(b_t, l_t)[0]
+                        save_flac(out, enh.cpu().numpy())
+                        written += 1
+                    except Exception as single_e:
+                        failed += 1
+                        if failed <= 5:
+                            print(f"\n  failed on {src.name}: {single_e}")
+                    pbar.update(1)
+
+        pbar.close()
+        print(f"{args.model}_snr{snr}: {written} written, {skipped} already existed, {failed} failed")
         if failed:
             print("WARNING: investigate failures before continuing.")
 
 
 if __name__ == "__main__":
     main()
+
