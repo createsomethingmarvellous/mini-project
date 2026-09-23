@@ -70,6 +70,21 @@ def average_into(swa_state, model_state, n):
     return swa_state
 
 
+class FocalLoss(nn.Module):
+    """Focal Loss (gamma=2.0) down-weights easy samples and focuses gradients on hard noisy/enhanced clips."""
+    def __init__(self, weight=None, gamma=2.0):
+        super().__init__()
+        self.weight = weight
+        self.gamma = gamma
+        self.ce = nn.CrossEntropyLoss(weight=weight, reduction='none')
+
+    def forward(self, inputs, targets):
+        logpt = -self.ce(inputs, targets)
+        pt = torch.exp(logpt)
+        loss = -((1 - pt) ** self.gamma) * logpt
+        return loss.mean()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", choices=["B", "C"], required=True,
@@ -119,13 +134,13 @@ def main():
     print(f"Training files: {len(paths)}  |  dev files: {len(dev_rows)}  |  "
           f"{batches_per_epoch} batches per epoch")
 
-    # ---- model / optimizer (AASIST recipe) ---------------------------------
+    # ---- model / optimizer (AASIST recipe with Focal Loss + Frequency Masking) -----
     model = ab.build_model(conf["model_config"], device)
     optim_config = conf["optim_config"]
     optim_config["epochs"] = conf["num_epochs"]
     optim_config["steps_per_epoch"] = batches_per_epoch
     optimizer, scheduler = create_optimizer(model.parameters(), optim_config)
-    criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([0.1, 0.9]).to(device))
+    criterion = FocalLoss(weight=torch.FloatTensor([0.1, 0.9]).to(device), gamma=2.0)
 
     # epoch/batch = where training stopped; loss_sum/seen/minutes = this epoch so far
     state = {"epoch": 0, "batch": 0, "loss_sum": 0.0, "seen": 0, "minutes": 0.0,
@@ -157,7 +172,7 @@ def main():
         for batch_x, batch_y in bar:
             batch_x = batch_x.to(device)
             batch_y = batch_y.view(-1).long().to(device)
-            _, out = model(batch_x, Freq_aug=False)
+            _, out = model(batch_x, Freq_aug=True)
             loss = criterion(out, batch_y)
             optimizer.zero_grad()
             loss.backward()
