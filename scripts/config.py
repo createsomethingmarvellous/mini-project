@@ -95,9 +95,8 @@ TRAIN_SNR_MAX_DB = 20
 # ----------------------------------------------------------------------
 # TRAINING  (decisions B12, B15, E29)
 # ----------------------------------------------------------------------
-# B12: batch 16, not AASIST's default 24 (free Colab T4 has no margin).
-# Fallback ladder if out of memory: 16 -> 12 -> switch to AASIST-L.
-BATCH_SIZE = 16
+# Increase batch size to 22 for ~14.5 GB GPU VRAM utilization on Colab T4
+BATCH_SIZE = 22
 
 # Scoring only (no training): bigger batches use more of the GPU and give
 # identical scores, because AASIST scores each file independently in eval mode.
