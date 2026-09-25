@@ -121,10 +121,12 @@ def main():
         gen.manual_seed(args.seed * 1000 + epoch)
         order = torch.randperm(len(train_set), generator=gen).tolist()
         order = order[start_batch * bs: batches_per_epoch * bs]
+        kwargs = {"pin_memory": True, "num_workers": args.workers,
+                  "worker_init_fn": seed_worker, "generator": gen}
+        if args.workers > 0:
+            kwargs["prefetch_factor"] = 4
         return torch.utils.data.DataLoader(
-            train_set, batch_size=bs, sampler=order, drop_last=True,
-            pin_memory=True, num_workers=args.workers,
-            worker_init_fn=seed_worker, generator=gen)
+            train_set, batch_size=bs, sampler=order, drop_last=True, **kwargs)
 
     dev_rows = read_protocol(protocol_path("dev"))
     dev_loader = ab.eval_loader(dev_rows, split_dir("dev"))
