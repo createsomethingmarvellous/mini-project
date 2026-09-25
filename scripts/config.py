@@ -95,8 +95,8 @@ TRAIN_SNR_MAX_DB = 20
 # ----------------------------------------------------------------------
 # TRAINING  (decisions B12, B15, E29)
 # ----------------------------------------------------------------------
-# Increase batch size to 22 for ~14.5 GB GPU VRAM utilization on Colab T4
-BATCH_SIZE = 22
+# Set batch size to 24 (AASIST max batch size) for ~14.8 GB GPU VRAM utilization on Colab T4
+BATCH_SIZE = 24
 
 # Scoring only (no training): bigger batches use more of the GPU and give
 # identical scores, because AASIST scores each file independently in eval mode.

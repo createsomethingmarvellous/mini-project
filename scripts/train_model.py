@@ -134,7 +134,11 @@ def main():
         print("WARNING: reading audio from Drive (slow). Run "
               "'python scripts/fast_data.py unpack' first.")
     print(f"Training files: {len(paths)}  |  dev files: {len(dev_rows)}  |  "
-          f"{batches_per_epoch} batches per epoch")
+          f"{batches_per_epoch} batches per epoch (batch size {bs})")
+    if torch.cuda.is_available():
+        res = torch.cuda.memory_reserved() / 1024**3
+        alloc = torch.cuda.memory_allocated() / 1024**3
+        print(f"GPU VRAM Active Tensors: {alloc:.1f} GB  |  GPU VRAM Reserved by CUDA: {res:.1f} GB (of 15.0 GB)")
 
     # ---- model / optimizer (AASIST recipe with Focal Loss + Frequency Masking) -----
     model = ab.build_model(conf["model_config"], device)
