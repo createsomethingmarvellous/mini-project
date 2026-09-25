@@ -50,7 +50,11 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     conf = ab.load_aasist_config()
     model = ab.build_model(conf["model_config"], device)
-    model.load_state_dict(torch.load(weights, map_location=device))
+    try:
+        model_weights = torch.load(weights, map_location=device, weights_only=False)
+    except TypeError:
+        model_weights = torch.load(weights, map_location=device)
+    model.load_state_dict(model_weights)
     print(f"Model {tag} loaded from {weights}")
     print(f"Reading audio from {config.DATA_BASE}"
           + ("" if config.DATA_BASE == config.LOCAL_DATA else

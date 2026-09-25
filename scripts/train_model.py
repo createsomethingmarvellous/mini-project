@@ -146,7 +146,10 @@ def main():
     state = {"epoch": 0, "batch": 0, "loss_sum": 0.0, "seen": 0, "minutes": 0.0,
              "best_dev_eer": 100.0, "swa": None, "n_swa": 0}
     if ckpt_path.exists():
-        ckpt = torch.load(ckpt_path, map_location=device)
+        try:
+            ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+        except TypeError:
+            ckpt = torch.load(ckpt_path, map_location=device)
         model.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optimizer"])
         scheduler.load_state_dict(ckpt["scheduler"])
