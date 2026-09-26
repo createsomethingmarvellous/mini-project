@@ -51,46 +51,75 @@ else:
     EVAL_BATCH_SIZE = 48
     ENHANCEMENT_BATCH_SIZE = 32
 
-ARCHIVE_DIR = BASE / "archives"                 # one .tar per dataset (fast_data.py)
+# Helper to find first existing directory from a list of candidates
+def _first_existing(candidates, default):
+    for c in candidates:
+        if c.exists():
+            return c
+    return default
 
-# Search anywhere under /kaggle/input for ASVspoof protocol folder if attached on Kaggle
-KAGGLE_PROTOCOLS = list(Path("/kaggle/input").rglob("ASVspoof2019_LA_cm_protocols")) if Path("/kaggle/input").exists() else []
+# Intelligent path resolution across Kaggle / Colab / Drive
+KAG_INPUTS = list(Path("/kaggle/input").glob("*")) if Path("/kaggle/input").exists() else []
 
+# Archive directory (check Drive, local working dir, or Kaggle input datasets)
+ARCHIVE_DIR = _first_existing(
+    [BASE / "archives"] + [k / "archives" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "archive" in k.name.lower()],
+    BASE / "archives"
+)
+
+# Audio data base directory
 if os.environ.get("MP_DATA"):
     DATA_BASE = Path(os.environ["MP_DATA"])
-elif KAGGLE_PROTOCOLS:
-    DATA_BASE = KAGGLE_PROTOCOLS[0].parent.parent
-elif (LOCAL_DATA / "asvspoof2019").exists():
-    DATA_BASE = LOCAL_DATA                      # unpacked this session: fast
+elif (LOCAL_DATA / "asvspoof2019").exists() or (LOCAL_DATA / "ASVspoof2019").exists():
+    DATA_BASE = LOCAL_DATA
 else:
-    DATA_BASE = BASE                            # fallback: files directly on Drive/Kaggle
+    DATA_BASE = BASE
 
-# Downloaded inputs (tasks T2-T5)
-if KAGGLE_PROTOCOLS:
-    ASVSPOOF_DIR = KAGGLE_PROTOCOLS[0].parent
-else:
-    ASVSPOOF_DIR = DATA_BASE / "asvspoof2019"   # searched automatically for the LA folder
+# Downloaded inputs (auto-finds ASVspoof, MS-SNSD, RIRS across Kaggle inputs & Drive)
+ASVSPOOF_DIR = _first_existing(
+    [DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
+    [k / "asvspoof2019" for k in KAG_INPUTS] + [k / "ASVspoof2019" for k in KAG_INPUTS] +
+    [k for k in KAG_INPUTS if "asvspoof" in k.name.lower()],
+    DATA_BASE / "asvspoof2019"
+)
 
-MSSNSD_DIR = DATA_BASE / "MS-SNSD"
-RIRS_DIR = DATA_BASE / "RIRS_NOISES"
-AASIST_DIR = BASE / "aasist"
+MSSNSD_DIR = _first_existing(
+    [DATA_BASE / "MS-SNSD"] + [k / "MS-SNSD" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "ms-snsd" in k.name.lower()],
+    DATA_BASE / "MS-SNSD"
+)
+
+RIRS_DIR = _first_existing(
+    [DATA_BASE / "RIRS_NOISES"] + [k / "RIRS_NOISES" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "rirs" in k.name.lower()],
+    DATA_BASE / "RIRS_NOISES"
+)
+
+REPO_DIR = Path(__file__).resolve().parent.parent
+
+AASIST_DIR = _first_existing(
+    [BASE / "aasist", REPO_DIR / "aasist"] + [k / "aasist" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "aasist" in k.name.lower()],
+    BASE / "aasist"
+)
+
 MODEL_A_WEIGHTS = AASIST_DIR / "models" / "weights" / "AASIST.pth"
 
-# Train and test noise are kept apart, so Model B never hears a test noise.
+# Train and test noise paths
 NOISE_TRAIN_DIR = MSSNSD_DIR / "noise_train"
 NOISE_TEST_DIR = MSSNSD_DIR / "noise_test"
 RIR_DIR = RIRS_DIR / "simulated_rirs"
 
-# Generated data (pack to Drive with fast_data.py after building)
+# Generated data (noisy / enhanced / train_aug)
 GENERATED_DIR = DATA_BASE / "generated"
-EVAL_CONDITIONS_DIR = GENERATED_DIR / "eval"    # eval/<condition>/flac/*.flac
-TRAIN_AUG_DIR = GENERATED_DIR / "train_aug"     # flac/*.flac + protocol_aug.txt
+EVAL_CONDITIONS_DIR = GENERATED_DIR / "eval"
+TRAIN_AUG_DIR = GENERATED_DIR / "train_aug"
 
-# Outputs
-CHECKPOINT_DIR = BASE / "checkpoints"           # checkpoints/<tag>/...
-SCORES_DIR = BASE / "scores"                    # scores/<tag>/<condition>.txt
-REPO_DIR = Path(__file__).resolve().parent.parent
-RESULTS_DIR = REPO_DIR / "results"              # small summary tables (committed)
+# Checkpoints (auto-search Drive, Kaggle working dir, and Kaggle input datasets)
+CHECKPOINT_DIR = _first_existing(
+    [BASE / "checkpoints"] + [k / "checkpoints" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "checkpoint" in k.name.lower()],
+    BASE / "checkpoints"
+)
+
+SCORES_DIR = BASE / "scores"
+RESULTS_DIR = REPO_DIR / "results"
 
 # Fixed eval subset shared by the whole team (commit this file once made)
 EVAL_SUBSET_FILE = REPO_DIR / "configs" / "eval_subset_10k.txt"
