@@ -62,6 +62,13 @@ else:
 
 # Downloaded inputs (tasks T2-T5)
 ASVSPOOF_DIR = DATA_BASE / "asvspoof2019"   # searched automatically for the LA folder
+
+# Kaggle input dataset auto-detection
+if IS_KAGGLE and Path("/kaggle/input").exists():
+    asv_hits = list(Path("/kaggle/input").glob("**/ASVspoof2019_LA_cm_protocols"))
+    if asv_hits:
+        ASVSPOOF_DIR = asv_hits[0].parent.parent
+
 MSSNSD_DIR = DATA_BASE / "MS-SNSD"
 RIRS_DIR = DATA_BASE / "RIRS_NOISES"
 AASIST_DIR = BASE / "aasist"

@@ -105,14 +105,5 @@ def save_flac(path: Path, audio: np.ndarray) -> None:
 
 def add_aasist_to_path() -> None:
     if not (config.AASIST_DIR / "evaluation.py").exists():
-        import subprocess
-        print(f"Auto-cloning official AASIST repository to {config.AASIST_DIR} ...")
-        config.AASIST_DIR.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            subprocess.run(["git", "clone", "-q", "https://github.com/clovaai/aasist.git", str(config.AASIST_DIR)], check=True)
-            setup_script = config.REPO_DIR / "scripts" / "setup_aasist.py"
-            if setup_script.exists():
-                subprocess.run([sys.executable, str(setup_script)], check=False)
-        except Exception as e:
-            sys.exit(f"ERROR: Failed to clone AASIST repository to {config.AASIST_DIR}: {e}")
+        sys.exit(f"ERROR: AASIST code not found at {config.AASIST_DIR}. Do T5.")
     sys.path.insert(0, str(config.AASIST_DIR))
