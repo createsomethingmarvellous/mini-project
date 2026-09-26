@@ -20,8 +20,37 @@ from pathlib import Path
 #               archives to Colab's local disk, everything uses that copy.
 # For a local dry run, set MP_BASE (and optionally MP_DATA).
 # ----------------------------------------------------------------------
-BASE = Path(os.environ.get("MP_BASE", "/content/drive/MyDrive/mini_project"))
-LOCAL_DATA = Path("/content/fast")
+# ----------------------------------------------------------------------
+# ENVIRONMENT AUTO-DETECTION (Kaggle vs Colab vs Local)
+# ----------------------------------------------------------------------
+IS_KAGGLE = "KAGGLE_KERNEL_RUN_TYPE" in os.environ or Path("/kaggle/working").exists()
+IS_COLAB = "COLAB_GPU" in os.environ or Path("/content").exists()
+
+if IS_KAGGLE:
+    ENV_NAME = "Kaggle (30 GB RAM + 4 CPU Cores)"
+    BASE = Path(os.environ.get("MP_BASE", "/kaggle/working/mini_project"))
+    LOCAL_DATA = Path("/kaggle/fast") if Path("/kaggle/fast").exists() else Path("/kaggle/working/fast")
+    NUM_WORKERS = min(8, max(4, os.cpu_count() or 4))  # 4 CPU workers for 2x parallel audio loading
+    BATCH_SIZE = 32  # 32 batch size with Kaggle high RAM/GPU
+    EVAL_BATCH_SIZE = 64
+    ENHANCEMENT_BATCH_SIZE = 64
+elif IS_COLAB:
+    ENV_NAME = "Google Colab"
+    BASE = Path(os.environ.get("MP_BASE", "/content/drive/MyDrive/mini_project"))
+    LOCAL_DATA = Path("/content/fast")
+    NUM_WORKERS = max(2, min(8, os.cpu_count() or 2))
+    BATCH_SIZE = 24
+    EVAL_BATCH_SIZE = 48
+    ENHANCEMENT_BATCH_SIZE = 32
+else:
+    ENV_NAME = "Local PC / Other"
+    BASE = Path(os.environ.get("MP_BASE", Path(__file__).resolve().parent.parent / "data"))
+    LOCAL_DATA = BASE / "fast"
+    NUM_WORKERS = max(2, min(8, os.cpu_count() or 2))
+    BATCH_SIZE = 24
+    EVAL_BATCH_SIZE = 48
+    ENHANCEMENT_BATCH_SIZE = 32
+
 ARCHIVE_DIR = BASE / "archives"                 # one .tar per dataset (fast_data.py)
 
 if os.environ.get("MP_DATA"):
@@ -29,7 +58,7 @@ if os.environ.get("MP_DATA"):
 elif (LOCAL_DATA / "asvspoof2019").exists():
     DATA_BASE = LOCAL_DATA                      # unpacked this session: fast
 else:
-    DATA_BASE = BASE                            # fallback: files directly on Drive (slow)
+    DATA_BASE = BASE                            # fallback: files directly on Drive/Kaggle
 
 # Downloaded inputs (tasks T2-T5)
 ASVSPOOF_DIR = DATA_BASE / "asvspoof2019"   # searched automatically for the LA folder
@@ -92,23 +121,7 @@ AUG_COPIES = ["n", "r", "nr"]
 TRAIN_SNR_MIN_DB = 0
 TRAIN_SNR_MAX_DB = 20
 
-# ----------------------------------------------------------------------
-# TRAINING  (decisions B12, B15, E29)
-# ----------------------------------------------------------------------
-# Set batch size to 24 (AASIST max batch size) for ~14.8 GB GPU VRAM utilization on Colab T4
-BATCH_SIZE = 24
-
-# Scoring only (no training): bigger batches use more of the GPU and give
-# identical scores, because AASIST scores each file independently in eval mode.
-# Batch 16 used ~3.7 GB on a T4; 48 uses roughly 10-11 GB of its 15 GB.
-# If you see "CUDA out of memory" while scoring, lower this (e.g. 32).
-EVAL_BATCH_SIZE = 48
-
-# Speech enhancement inference batch size (uses ~12-13.5 GB VRAM on T4 GPU)
-ENHANCEMENT_BATCH_SIZE = 32
-
-# CPU processes for loading audio and building noisy sets.
-NUM_WORKERS = max(2, min(8, os.cpu_count() or 2))
+# Batch size parameters are auto-configured above based on environment (IS_KAGGLE vs IS_COLAB)
 
 # E29: AASIST's default is 100. Time one epoch first (train_model.py prints
 # it). If 100 x 3 seeds does not fit, lower this AND train the clean
@@ -150,7 +163,8 @@ def eval_conditions():
 
 if __name__ == "__main__":
     print("Project configuration")
-    print(f"  Base path (Drive): {BASE}")
+    print(f"  Environment:       {ENV_NAME}")
+    print(f"  Base path:         {BASE}")
     print(f"  Audio read from:   {DATA_BASE}"
           + ("   (fast local disk)" if DATA_BASE == LOCAL_DATA else "   (Drive - slow)"))
     print(f"  CPU workers:       {NUM_WORKERS}")
