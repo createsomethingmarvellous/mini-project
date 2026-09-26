@@ -3,11 +3,10 @@ kaggle.json
 *.token
 .env
 
-# Datasets and generated audio archives (never commit large audio tars)
+# Datasets and generated audio (live on Google Drive)
 *.flac
 *.wav
 *.zip
-*.tar
 *.tar.gz
 asvspoof2019/
 MS-SNSD/
@@ -16,10 +15,13 @@ generated/
 aasist/
 pretrained_enhance/
 
-# Heavy temporary checkpoint state (only keep final swa.pth & best_dev.pth)
-last_checkpoint.pth
-*.tmp.pth
-*.tmp
+# Model checkpoints and raw scores (live on Google Drive)
+*.pth
+*.pt
+*.ckpt
+checkpoints/
+scores/
+exp_result/
 
 # Python / notebooks
 __pycache__/
