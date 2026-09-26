@@ -27,13 +27,15 @@ def la_root() -> Path:
     # Look only a few folder levels deep: scanning every audio file on Drive is slow.
     name = "ASVspoof2019_LA_cm_protocols"
     hits = []
-    for depth in range(4):
+    for depth in range(6):
         hits = sorted(config.ASVSPOOF_DIR.glob("/".join(["*"] * depth + [name])))
         if hits:
             break
+    if not hits and Path("/kaggle/input").exists():
+        hits = sorted(Path("/kaggle/input").rglob(name))
     if not hits:
         sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under "
-                 f"{config.ASVSPOOF_DIR}. Finish T2 first.")
+                 f"{config.ASVSPOOF_DIR} or /kaggle/input. Finish T2 first.")
     return hits[0].parent
 
 

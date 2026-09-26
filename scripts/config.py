@@ -53,21 +53,21 @@ else:
 
 ARCHIVE_DIR = BASE / "archives"                 # one .tar per dataset (fast_data.py)
 
-# Search for Kaggle input ASVspoof dataset protocols if attached anywhere on Kaggle
-KAGGLE_INPUT_ASVSPOOF = list(Path("/kaggle/input").glob("**/ASVspoof2019_LA_cm_protocols")) if Path("/kaggle/input").exists() else []
+# Search anywhere under /kaggle/input for ASVspoof protocol folder if attached on Kaggle
+KAGGLE_PROTOCOLS = list(Path("/kaggle/input").rglob("ASVspoof2019_LA_cm_protocols")) if Path("/kaggle/input").exists() else []
 
 if os.environ.get("MP_DATA"):
     DATA_BASE = Path(os.environ["MP_DATA"])
+elif KAGGLE_PROTOCOLS:
+    DATA_BASE = KAGGLE_PROTOCOLS[0].parent.parent
 elif (LOCAL_DATA / "asvspoof2019").exists():
     DATA_BASE = LOCAL_DATA                      # unpacked this session: fast
-elif KAGGLE_INPUT_ASVSPOOF:
-    DATA_BASE = KAGGLE_INPUT_ASVSPOOF[0].parent.parent
 else:
     DATA_BASE = BASE                            # fallback: files directly on Drive/Kaggle
 
 # Downloaded inputs (tasks T2-T5)
-if KAGGLE_INPUT_ASVSPOOF:
-    ASVSPOOF_DIR = KAGGLE_INPUT_ASVSPOOF[0].parent.parent
+if KAGGLE_PROTOCOLS:
+    ASVSPOOF_DIR = KAGGLE_PROTOCOLS[0].parent
 else:
     ASVSPOOF_DIR = DATA_BASE / "asvspoof2019"   # searched automatically for the LA folder
 
