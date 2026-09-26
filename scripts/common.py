@@ -24,19 +24,29 @@ def la_root() -> Path:
     Found by searching, because the Kaggle mirror nests folders differently
     from the official download.
     """
-    # Look only a few folder levels deep: scanning every audio file on Drive is slow.
     name = "ASVspoof2019_LA_cm_protocols"
-    hits = []
+    target_file = "ASVspoof2019.LA.cm.train.trn.txt"
+    
+    # 1. Search config.ASVSPOOF_DIR
     for depth in range(6):
         hits = sorted(config.ASVSPOOF_DIR.glob("/".join(["*"] * depth + [name])))
         if hits:
-            break
-    if not hits and Path("/kaggle/input").exists():
-        hits = sorted(Path("/kaggle/input").rglob(name))
-    if not hits:
-        sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under "
-                 f"{config.ASVSPOOF_DIR} or /kaggle/input. Finish T2 first.")
-    return hits[0].parent
+            return hits[0].parent
+
+    # 2. Search local unpacked data folder
+    if (config.LOCAL_DATA / "asvspoof2019").exists():
+        hits = sorted((config.LOCAL_DATA / "asvspoof2019").rglob(name))
+        if hits:
+            return hits[0].parent
+
+    # 3. Search /kaggle/input recursively for the protocol file
+    if Path("/kaggle/input").exists():
+        hits = sorted(Path("/kaggle/input").rglob(target_file))
+        if hits:
+            return hits[0].parent.parent
+
+    sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under "
+             f"{config.ASVSPOOF_DIR}, {config.LOCAL_DATA}, or /kaggle/input. Finish T2 first.")
 
 
 def split_dir(split: str) -> Path:
