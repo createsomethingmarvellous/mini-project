@@ -21,25 +21,20 @@ PROTOCOL_NAMES = {
 def la_root() -> Path:
     """
     Folder that holds ASVspoof2019_LA_train/dev/eval and the protocols.
-    Found by searching config.ASVSPOOF_DIR and /kaggle/input automatically.
+    Found by searching, because the Kaggle mirror nests folders differently
+    from the official download.
     """
+    # Look only a few folder levels deep: scanning every audio file on Drive is slow.
     name = "ASVspoof2019_LA_cm_protocols"
-    search_dirs = [config.ASVSPOOF_DIR]
-    if Path("/kaggle/input").exists():
-        search_dirs.append(Path("/kaggle/input"))
-    if Path("/content/drive/MyDrive/mini_project").exists():
-        search_dirs.append(Path("/content/drive/MyDrive/mini_project"))
-
-    for s_dir in search_dirs:
-        if not s_dir.exists():
-            continue
-        for depth in range(5):
-            hits = sorted(s_dir.glob("/".join(["*"] * depth + [name])))
-            if hits:
-                return hits[0].parent
-
-    sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder found under {config.ASVSPOOF_DIR}. "
-             "Unpack asvspoof archive or add Google Drive / Kaggle dataset input.")
+    hits = []
+    for depth in range(4):
+        hits = sorted(config.ASVSPOOF_DIR.glob("/".join(["*"] * depth + [name])))
+        if hits:
+            break
+    if not hits:
+        sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under "
+                 f"{config.ASVSPOOF_DIR}. Finish T2 first.")
+    return hits[0].parent
 
 
 def split_dir(split: str) -> Path:
