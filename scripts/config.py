@@ -60,10 +60,12 @@ def _first_existing(candidates, default):
 
 # Intelligent path resolution across Kaggle / Colab / Drive
 KAG_INPUTS = list(Path("/kaggle/input").glob("*")) if Path("/kaggle/input").exists() else []
+KAG_SUBDIRS = [d for d in Path("/kaggle/input").glob("*/*") if d.is_dir()] if Path("/kaggle/input").exists() else []
+ALL_KAG_DIRS = KAG_INPUTS + KAG_SUBDIRS
 
-# Archive directory (check Drive, local working dir, or Kaggle input datasets)
+# Archive directory (check Drive, local working dir, or any Kaggle input dataset folder)
 ARCHIVE_DIR = _first_existing(
-    [BASE / "archives"] + [k / "archives" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "archive" in k.name.lower()],
+    [BASE / "archives"] + [k / "archives" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if list(k.glob("*.tar")) or "archive" in k.name.lower()],
     BASE / "archives"
 )
 
@@ -78,25 +80,25 @@ else:
 # Downloaded inputs (auto-finds ASVspoof, MS-SNSD, RIRS across Kaggle inputs & Drive)
 ASVSPOOF_DIR = _first_existing(
     [DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
-    [k / "asvspoof2019" for k in KAG_INPUTS] + [k / "ASVspoof2019" for k in KAG_INPUTS] +
-    [k for k in KAG_INPUTS if "asvspoof" in k.name.lower()],
+    [k / "asvspoof2019" for k in ALL_KAG_DIRS] + [k / "ASVspoof2019" for k in ALL_KAG_DIRS] +
+    [k for k in ALL_KAG_DIRS if "asvspoof" in k.name.lower() and not k.name.endswith(".tar")],
     DATA_BASE / "asvspoof2019"
 )
 
 MSSNSD_DIR = _first_existing(
-    [DATA_BASE / "MS-SNSD"] + [k / "MS-SNSD" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "ms-snsd" in k.name.lower()],
+    [DATA_BASE / "MS-SNSD"] + [k / "MS-SNSD" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "ms-snsd" in k.name.lower() or "mssnsd" in k.name.lower()],
     DATA_BASE / "MS-SNSD"
 )
 
 RIRS_DIR = _first_existing(
-    [DATA_BASE / "RIRS_NOISES"] + [k / "RIRS_NOISES" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "rirs" in k.name.lower()],
+    [DATA_BASE / "RIRS_NOISES"] + [k / "RIRS_NOISES" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "rirs" in k.name.lower()],
     DATA_BASE / "RIRS_NOISES"
 )
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 
 AASIST_DIR = _first_existing(
-    [BASE / "aasist", REPO_DIR / "aasist"] + [k / "aasist" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "aasist" in k.name.lower()],
+    [BASE / "aasist", REPO_DIR / "aasist"] + [k / "aasist" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if ("aasist" in k.name.lower() and (k / "main.py").exists())],
     BASE / "aasist"
 )
 
@@ -114,7 +116,7 @@ TRAIN_AUG_DIR = GENERATED_DIR / "train_aug"
 
 # Checkpoints (auto-search Drive, Kaggle working dir, and Kaggle input datasets)
 CHECKPOINT_DIR = _first_existing(
-    [BASE / "checkpoints"] + [k / "checkpoints" for k in KAG_INPUTS] + [k for k in KAG_INPUTS if "checkpoint" in k.name.lower()],
+    [BASE / "checkpoints"] + [k / "checkpoints" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "checkpoint" in k.name.lower()],
     BASE / "checkpoints"
 )
 

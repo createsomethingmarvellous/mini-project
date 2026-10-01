@@ -41,11 +41,34 @@ ARCHIVES = {
 
 
 def archive_path(name: str) -> Path:
+    # 1. Direct match in ARCHIVE_DIR
+    p = config.ARCHIVE_DIR / f"{name}.tar"
+    if p.exists():
+        return p
+    # 2. Direct match in BASE / archives
+    p = config.BASE / "archives" / f"{name}.tar"
+    if p.exists():
+        return p
+    # 3. Check recursively in all /kaggle/input datasets
+    if Path("/kaggle/input").exists():
+        matches = list(Path("/kaggle/input").rglob(f"{name}.tar"))
+        if matches:
+            return matches[0]
+        # Also check for .tar.gz
+        gz_matches = list(Path("/kaggle/input").rglob(f"{name}.tar.gz"))
+        if gz_matches:
+            return gz_matches[0]
+        # Partial match
+        clean_name = name.replace("_", "").lower()
+        for cand in Path("/kaggle/input").rglob("*.tar"):
+            if cand.stem.replace("_", "").replace("-", "").lower() == clean_name:
+                return cand
     return config.ARCHIVE_DIR / f"{name}.tar"
 
 
 def info_path(name: str) -> Path:
-    return config.ARCHIVE_DIR / f"{name}.json"
+    arch = archive_path(name)
+    return arch.with_suffix(".json")
 
 
 def marker_path(name: str) -> Path:
