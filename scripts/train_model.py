@@ -37,23 +37,29 @@ from utils import create_optimizer, seed_worker, set_seed  # AASIST utils
 
 def training_files(clean_only: bool):
     rows = read_protocol(protocol_path("train"))
-    train_flac = split_dir("train") / "flac"
+    train_dir = split_dir("train")
+    train_flac = train_dir / "flac" if (train_dir / "flac").exists() else train_dir
     paths = {r[1]: train_flac / f"{r[1]}.flac" for r in rows}
     if not clean_only:
         aug_protocol = config.TRAIN_AUG_DIR / "protocol_aug.txt"
         if not aug_protocol.exists():
-            sys.exit("ERROR: augmented training set missing. Run T9 first: "
-                     "python scripts/build_noisy_set.py --mode train")
+            cand_protocols = list(config.LOCAL_DATA.rglob("protocol_aug.txt"))
+            if Path("/kaggle/input").exists():
+                cand_protocols += list(Path("/kaggle/input").rglob("protocol_aug.txt"))
+            if cand_protocols:
+                aug_protocol = cand_protocols[0]
+            else:
+                sys.exit(f"ERROR: augmented training set missing ({aug_protocol}). Run T9 or unpack train_aug.tar first.")
         aug_rows = read_protocol(aug_protocol)
-        aug_flac = config.TRAIN_AUG_DIR / "flac"
+        aug_dir = aug_protocol.parent
+        aug_flac = aug_dir / "flac" if (aug_dir / "flac").exists() else aug_dir
         have = set(os.listdir(aug_flac)) if aug_flac.exists() else set()
         missing = [r[1] for r in aug_rows if f"{r[1]}.flac" not in have]
         if missing:
             sys.exit(f"ERROR: {len(missing)} augmented files not built yet "
                      f"(e.g. {missing[0]}). Re-run T9 until it finishes.")
         rows += aug_rows
-        paths.update({r[1]: config.TRAIN_AUG_DIR / "flac" / f"{r[1]}.flac"
-                      for r in aug_rows})
+        paths.update({r[1]: aug_flac / f"{r[1]}.flac" for r in aug_rows})
     labels = {r[1]: int(r[4] == "bonafide") for r in rows}
     return paths, labels
 

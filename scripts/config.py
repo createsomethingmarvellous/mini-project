@@ -79,20 +79,20 @@ else:
 
 # Downloaded inputs (auto-finds ASVspoof, MS-SNSD, RIRS across Kaggle inputs & Drive)
 ASVSPOOF_DIR = _first_existing(
-    [DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
+    [LOCAL_DATA / "asvspoof2019", LOCAL_DATA / "ASVspoof2019", DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
     [k / "asvspoof2019" for k in ALL_KAG_DIRS] + [k / "ASVspoof2019" for k in ALL_KAG_DIRS] +
     [k for k in ALL_KAG_DIRS if "asvspoof" in k.name.lower() and not k.name.endswith(".tar")],
-    DATA_BASE / "asvspoof2019"
+    LOCAL_DATA / "asvspoof2019"
 )
 
 MSSNSD_DIR = _first_existing(
-    [DATA_BASE / "MS-SNSD"] + [k / "MS-SNSD" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "ms-snsd" in k.name.lower() or "mssnsd" in k.name.lower()],
-    DATA_BASE / "MS-SNSD"
+    [LOCAL_DATA / "MS-SNSD", DATA_BASE / "MS-SNSD"] + [k / "MS-SNSD" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "ms-snsd" in k.name.lower() or "mssnsd" in k.name.lower()],
+    LOCAL_DATA / "MS-SNSD"
 )
 
 RIRS_DIR = _first_existing(
-    [DATA_BASE / "RIRS_NOISES"] + [k / "RIRS_NOISES" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "rirs" in k.name.lower()],
-    DATA_BASE / "RIRS_NOISES"
+    [LOCAL_DATA / "RIRS_NOISES", DATA_BASE / "RIRS_NOISES"] + [k / "RIRS_NOISES" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "rirs" in k.name.lower()],
+    LOCAL_DATA / "RIRS_NOISES"
 )
 
 REPO_DIR = Path(__file__).resolve().parent.parent
@@ -110,9 +110,15 @@ NOISE_TEST_DIR = MSSNSD_DIR / "noise_test"
 RIR_DIR = RIRS_DIR / "simulated_rirs"
 
 # Generated data (noisy / enhanced / train_aug)
-GENERATED_DIR = DATA_BASE / "generated"
+GENERATED_DIR = LOCAL_DATA / "generated" if (LOCAL_DATA / "generated").exists() else DATA_BASE / "generated"
 EVAL_CONDITIONS_DIR = GENERATED_DIR / "eval"
-TRAIN_AUG_DIR = GENERATED_DIR / "train_aug"
+TRAIN_AUG_DIR = _first_existing(
+    [LOCAL_DATA / "generated" / "train_aug", DATA_BASE / "generated" / "train_aug", BASE / "generated" / "train_aug"] +
+    [k / "generated" / "train_aug" for k in ALL_KAG_DIRS] +
+    [k / "train_aug" for k in ALL_KAG_DIRS] +
+    [k for k in ALL_KAG_DIRS if "train_aug" in k.name.lower() and not k.name.endswith(".tar")],
+    LOCAL_DATA / "generated" / "train_aug"
+)
 
 # Checkpoints (auto-search Drive, Kaggle working dir, and Kaggle input datasets)
 CHECKPOINT_DIR = _first_existing(
