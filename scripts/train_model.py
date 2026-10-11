@@ -99,6 +99,8 @@ def main():
     parser.add_argument("--clean", action="store_true",
                         help="train on clean data only (use with --tag C)")
     parser.add_argument("--workers", type=int, default=config.NUM_WORKERS)
+    parser.add_argument("--batch-size", type=int, default=None,
+                        help="override batch size (e.g. 64 for multi-GPU)")
     args = parser.parse_args()
     if (args.tag == "C") != args.clean:
         sys.exit("Use --clean exactly when --tag C.")
@@ -116,7 +118,7 @@ def main():
     # ---- data --------------------------------------------------------------
     paths, labels = training_files(args.clean)
     train_set = ab.TrainSet(paths, labels)
-    bs = conf["batch_size"]
+    bs = args.batch_size if args.batch_size else conf["batch_size"]
     batches_per_epoch = len(train_set) // bs      # drop_last, as in AASIST
 
     def epoch_loader(epoch, start_batch):
@@ -141,13 +143,24 @@ def main():
               "'python scripts/fast_data.py unpack' first.")
     print(f"Training files: {len(paths)}  |  dev files: {len(dev_rows)}  |  "
           f"{batches_per_epoch} batches per epoch (batch size {bs})")
+    
+    num_gpus = torch.cuda.device_count()
     if torch.cuda.is_available():
-        res = torch.cuda.memory_reserved() / 1024**3
-        alloc = torch.cuda.memory_allocated() / 1024**3
-        print(f"GPU VRAM Active Tensors: {alloc:.1f} GB  |  GPU VRAM Reserved by CUDA: {res:.1f} GB (of 15.0 GB)")
+        for i in range(num_gpus):
+            total_vram = torch.cuda.get_device_properties(i).total_memory / 1024**3
+            res_vram = torch.cuda.memory_reserved(i) / 1024**3
+            alloc_vram = torch.cuda.memory_allocated(i) / 1024**3
+            print(f"GPU {i} ({torch.cuda.get_device_name(i)}): {alloc_vram:.1f} GB active, {res_vram:.1f} GB reserved (of {total_vram:.1f} GB)")
 
     # ---- model / optimizer (AASIST recipe with Focal Loss + Frequency Masking) -----
     model = ab.build_model(conf["model_config"], device)
+    if num_gpus > 1:
+        print(f"\n🚀 Enabling PyTorch DataParallel across {num_gpus} GPUs (all {num_gpus * 15} GB VRAM active)!")
+        model = nn.DataParallel(model)
+
+    def get_raw_model(m):
+        return m.module if isinstance(m, nn.DataParallel) else m
+
     optim_config = conf["optim_config"]
     optim_config["epochs"] = conf["num_epochs"]
     optim_config["steps_per_epoch"] = batches_per_epoch
@@ -162,7 +175,9 @@ def main():
             ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
         except TypeError:
             ckpt = torch.load(ckpt_path, map_location=device)
-        model.load_state_dict(ckpt["model"])
+        model_weights = ckpt["model"]
+        clean_weights = {(k[7:] if k.startswith("module.") else k): v for k, v in model_weights.items()}
+        get_raw_model(model).load_state_dict(clean_weights)
         optimizer.load_state_dict(ckpt["optimizer"])
         scheduler.load_state_dict(ckpt["scheduler"])
         state = ckpt["state"]
@@ -171,7 +186,7 @@ def main():
 
     def save_checkpoint():
         tmp = ckpt_path.with_suffix(".tmp")
-        torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
+        torch.save({"model": get_raw_model(model).state_dict(), "optimizer": optimizer.state_dict(),
                     "scheduler": scheduler.state_dict(), "state": state}, tmp)
         tmp.replace(ckpt_path)   # never leaves a half-written checkpoint
 
@@ -209,9 +224,10 @@ def main():
                                   run_dir / "dev_scores.txt", device, progress=True)
         if dev_eer <= state["best_dev_eer"]:
             state["best_dev_eer"] = dev_eer
-            state["swa"] = average_into(state["swa"], model.state_dict(), state["n_swa"])
+            raw_m = get_raw_model(model)
+            state["swa"] = average_into(state["swa"], raw_m.state_dict(), state["n_swa"])
             state["n_swa"] += 1
-            torch.save(model.state_dict(), run_dir / "best_dev.pth")
+            torch.save(raw_m.state_dict(), run_dir / "best_dev.pth")
 
         loss_avg = state["loss_sum"] / max(state["seen"], 1)
         state.update(epoch=epoch + 1, batch=0, loss_sum=0.0, seen=0, minutes=0.0)
@@ -228,13 +244,14 @@ def main():
 
     # ---- final SWA model ---------------------------------------------------
     if not (run_dir / "swa.pth").exists():
-        model.load_state_dict(state["swa"])
+        raw_m = get_raw_model(model)
+        raw_m.load_state_dict(state["swa"])
         bn_loader = torch.utils.data.DataLoader(train_set, batch_size=bs,
                                                 num_workers=args.workers)
         print("Building the final SWA model (one pass over the training data) ...")
         torch.optim.swa_utils.update_bn(tqdm(bn_loader, desc="final SWA", unit="batch",
-                                             mininterval=30), model, device=device)
-        torch.save(model.state_dict(), run_dir / "swa.pth")
+                                             mininterval=30), raw_m, device=device)
+        torch.save(raw_m.state_dict(), run_dir / "swa.pth")
     print(f"Done. Final model: {run_dir / 'swa.pth'}")
 
 
