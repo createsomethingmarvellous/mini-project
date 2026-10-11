@@ -113,7 +113,7 @@ def _extract(tar, member):
         tar.extract(member, LOCAL)                  # older Python
 
 
-def unpack(name: str) -> None:
+def unpack(name: str, delete_archive: bool = False, force: bool = False) -> None:
     arch = archive_path(name)
     if not arch.exists():
         print(f"  {name:<16} no archive on Drive yet - skipped")
@@ -124,19 +124,27 @@ def unpack(name: str) -> None:
         return
 
     free = shutil.disk_usage(LOCAL.parent if not LOCAL.exists() else LOCAL).free
-    if arch.stat().st_size > free * 0.9:
+    if arch.stat().st_size > free * 0.9 and not force:
         sys.exit(f"ERROR: not enough local disk for {name} "
-                 f"({arch.stat().st_size / 1e9:.1f} GB needed, {free / 1e9:.1f} GB free).")
+                 f"({arch.stat().st_size / 1e9:.1f} GB needed, {free / 1e9:.1f} GB free). "
+                 f"Tip: delete unused evaluation archives or use --delete-archive / --force.")
 
     count = None
     if info_path(name).exists():
         count = json.loads(info_path(name).read_text()).get("files")
     LOCAL.mkdir(parents=True, exist_ok=True)
+    stamp = _stamp(name)
     with tarfile.open(arch, "r|") as tar:
         for member in tqdm(tar, total=count, unit="file", desc=f"unpack {name}",
                            mininterval=5):
             _extract(tar, member)
-    marker.write_text(json.dumps(_stamp(name)))
+    marker.write_text(json.dumps(stamp))
+    if delete_archive:
+        try:
+            arch.unlink()
+            print(f"  {name:<16} archive removed to free up disk ({stamp['size'] / 1e9:.2f} GB freed)")
+        except Exception as e:
+            print(f"  Could not remove archive {arch}: {e}")
 
 
 def status() -> None:
@@ -152,6 +160,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["pack", "unpack", "status"])
     parser.add_argument("names", nargs="*", help=f"archives: {list(ARCHIVES)}")
+    parser.add_argument("--delete-archive", action="store_true",
+                        help="delete archive file right after unpacking to save disk (e.g. in Kaggle)")
+    parser.add_argument("--force", action="store_true",
+                        help="force unpacking even if free disk calculation is tight")
     args = parser.parse_args()
     bad = [n for n in args.names if n not in ARCHIVES]
     if bad:
@@ -167,7 +179,7 @@ def main():
     else:
         print("Unpacking archives from Drive to the fast local disk:")
         for name in args.names or ARCHIVES:
-            unpack(name)
+            unpack(name, delete_archive=args.delete_archive, force=args.force)
         status()
 
 
