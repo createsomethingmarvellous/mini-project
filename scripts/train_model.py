@@ -24,6 +24,8 @@ import sys
 import time
 from pathlib import Path
 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -168,7 +170,10 @@ def main():
     optim_config["steps_per_epoch"] = batches_per_epoch
     optimizer, scheduler = create_optimizer(model.parameters(), optim_config)
     criterion = FocalLoss(weight=torch.FloatTensor([0.1, 0.9]).to(device), gamma=2.0)
-    scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
+    try:
+        scaler = torch.amp.GradScaler('cuda', enabled=args.amp)
+    except (TypeError, AttributeError):
+        scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
     if args.amp:
         print("⚡ FP16 Automatic Mixed Precision (AMP) enabled: active Tensor Cores!")
 
@@ -201,6 +206,7 @@ def main():
     for epoch in range(state["epoch"], conf["num_epochs"]):
         start, minutes_before = time.time(), state["minutes"]
         model.train()
+        torch.cuda.empty_cache()
         bar = tqdm(epoch_loader(epoch, state["batch"]), desc=f"epoch {epoch}",
                    total=batches_per_epoch, initial=state["batch"],
                    unit="batch", mininterval=30)
@@ -208,7 +214,11 @@ def main():
             batch_x = batch_x.to(device)
             batch_y = batch_y.view(-1).long().to(device)
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast(enabled=args.amp):
+            try:
+                autocast_ctx = torch.amp.autocast('cuda', enabled=args.amp)
+            except (TypeError, AttributeError):
+                autocast_ctx = torch.cuda.amp.autocast(enabled=args.amp)
+            with autocast_ctx:
                 _, out = model(batch_x, Freq_aug=True)
                 loss = criterion(out, batch_y)
             if args.amp:
