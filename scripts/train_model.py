@@ -100,7 +100,9 @@ def main():
                         help="train on clean data only (use with --tag C)")
     parser.add_argument("--workers", type=int, default=config.NUM_WORKERS)
     parser.add_argument("--batch-size", type=int, default=None,
-                        help="override batch size (e.g. 64 for multi-GPU)")
+                        help="override batch size (e.g. 64, 96, 128)")
+    parser.add_argument("--amp", action="store_true",
+                        help="enable FP16 Automatic Mixed Precision (uses Tensor Cores, saves ~40% VRAM)")
     args = parser.parse_args()
     if (args.tag == "C") != args.clean:
         sys.exit("Use --clean exactly when --tag C.")
@@ -166,6 +168,9 @@ def main():
     optim_config["steps_per_epoch"] = batches_per_epoch
     optimizer, scheduler = create_optimizer(model.parameters(), optim_config)
     criterion = FocalLoss(weight=torch.FloatTensor([0.1, 0.9]).to(device), gamma=2.0)
+    scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
+    if args.amp:
+        print("⚡ FP16 Automatic Mixed Precision (AMP) enabled: active Tensor Cores!")
 
     # epoch/batch = where training stopped; loss_sum/seen/minutes = this epoch so far
     state = {"epoch": 0, "batch": 0, "loss_sum": 0.0, "seen": 0, "minutes": 0.0,
@@ -202,11 +207,17 @@ def main():
         for batch_x, batch_y in bar:
             batch_x = batch_x.to(device)
             batch_y = batch_y.view(-1).long().to(device)
-            _, out = model(batch_x, Freq_aug=True)
-            loss = criterion(out, batch_y)
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            with torch.cuda.amp.autocast(enabled=args.amp):
+                _, out = model(batch_x, Freq_aug=True)
+                loss = criterion(out, batch_y)
+            if args.amp:
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
             scheduler.step()
             state["batch"] += 1
             state["loss_sum"] += loss.item() * batch_x.size(0)
