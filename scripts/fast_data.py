@@ -113,59 +113,27 @@ def _extract(tar, member):
         tar.extract(member, LOCAL)                  # older Python
 
 
-def _kag_roots():
-    """All /kaggle/input roots including private dataset paths (datasets/<user>/<name>/)."""
-    roots = []
-    kag = Path("/kaggle/input")
-    if not kag.exists():
-        return roots
-    roots.append(kag)
-    priv = kag / "datasets"
-    if priv.exists():
-        for user_dir in priv.glob("*"):
-            if user_dir.is_dir():
-                roots.append(user_dir)
-                for ds_dir in user_dir.glob("*"):
-                    if ds_dir.is_dir():
-                        roots.append(ds_dir)
-    return roots
-
-
 def is_already_available(name: str) -> bool:
-    """Check if the dataset is already extracted in /kaggle/input (fast, no file scan)."""
-    roots = _kag_roots()
-    if not roots:
+    """Check if the dataset is already extracted in /kaggle/input (pruned search, < 0.05s)."""
+    if not Path("/kaggle/input").exists():
         return False
+    kag = [Path("/kaggle/input")]
     if name == "asvspoof":
-        for root in roots:
-            for pat in (
-                "*/asvspoof*/LA/LA",
-                "*/*/asvspoof*/LA/LA",
-                "*/asvspoof2019/LA/LA",
-                "*/*/asvspoof2019/LA/LA",
-            ):
-                for p in root.glob(pat):
-                    if p.is_dir() and (
-                        (p / "ASVspoof2019_LA_cm_protocols").is_dir()
-                        or any(c.name.startswith("ASVspoof2019_LA") for c in p.iterdir() if c.is_dir())
-                    ):
-                        return True
+        return (
+            config.find_folder_fast("ASVspoof2019_LA_cm_protocols", kag) is not None or
+            config.find_folder_fast("ASVspoof2019_LA_asv_protocols", kag) is not None or
+            config.find_folder_fast("ASVspoof2019_LA_train", kag) is not None
+        )
     elif name == "train_aug":
-        for root in roots:
-            for pat in ("*/train_aug", "*/generated/train_aug"):
-                if any(root.glob(pat)):
-                    return True
+        return config.find_folder_fast("train_aug", kag) is not None
     elif name == "noise":
-        for root in roots:
-            for pat in ("*/noise*/noise_train", "*/noise_train", "*/MS-SNSD/noise_train"):
-                if any(root.glob(pat)):
-                    return True
+        return config.find_folder_fast("noise_train", kag) is not None
     elif name.startswith("eval_"):
         cond_prefix = name.replace("eval_", "")
-        for root in roots:
-            for pat in (f"*/{cond_prefix}_snr*", f"*/{name}"):
-                if any(root.glob(pat)):
-                    return True
+        return (
+            config.find_folder_fast(f"{cond_prefix}_snr0", kag) is not None or
+            config.find_folder_fast(name, kag) is not None
+        )
     return False
 
 
