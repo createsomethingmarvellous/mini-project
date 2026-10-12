@@ -61,7 +61,8 @@ def _first_existing(candidates, default):
 # Intelligent path resolution across Kaggle / Colab / Drive
 KAG_INPUTS = list(Path("/kaggle/input").glob("*")) if Path("/kaggle/input").exists() else []
 KAG_SUBDIRS = [d for d in Path("/kaggle/input").glob("*/*") if d.is_dir()] if Path("/kaggle/input").exists() else []
-ALL_KAG_DIRS = KAG_INPUTS + KAG_SUBDIRS
+KAG_SUBDIRS3 = [d for d in Path("/kaggle/input").glob("*/*/*") if d.is_dir()] if Path("/kaggle/input").exists() else []
+ALL_KAG_DIRS = KAG_INPUTS + KAG_SUBDIRS + KAG_SUBDIRS3
 
 # Archive directory (check Drive, local working dir, or any Kaggle input dataset folder)
 ARCHIVE_DIR = _first_existing(
@@ -77,11 +78,11 @@ elif (LOCAL_DATA / "asvspoof2019").exists() or (LOCAL_DATA / "ASVspoof2019").exi
 else:
     DATA_BASE = BASE
 
-# Downloaded inputs (auto-finds ASVspoof, MS-SNSD, RIRS across Kaggle inputs & Drive)
+# Downloaded inputs (auto-finds ASVspoof/asvpoof, MS-SNSD, RIRS across Kaggle inputs & Drive)
 ASVSPOOF_DIR = _first_existing(
     [LOCAL_DATA / "asvspoof2019", LOCAL_DATA / "ASVspoof2019", DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
     [k / "asvspoof2019" for k in ALL_KAG_DIRS] + [k / "ASVspoof2019" for k in ALL_KAG_DIRS] +
-    [k for k in ALL_KAG_DIRS if "asvspoof" in k.name.lower() and not k.name.endswith(".tar")],
+    [k for k in ALL_KAG_DIRS if ("asvspoof" in k.name.lower() or "asvpoof" in k.name.lower()) and not k.name.endswith(".tar")],
     LOCAL_DATA / "asvspoof2019"
 )
 
