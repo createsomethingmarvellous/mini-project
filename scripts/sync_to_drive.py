@@ -23,6 +23,26 @@ sys.path.insert(0, str(Path(__file__).parent))
 import config
 
 
+import re
+
+
+def clean_gdrive_id(url_or_id: str) -> str:
+    """Extract clean Google Drive ID from any URL or string."""
+    if not url_or_id:
+        return ""
+    s = str(url_or_id).strip()
+    m = re.search(r'folders/([a-zA-Z0-9_-]+)', s)
+    if m:
+        return m.group(1)
+    m = re.search(r'/d/([a-zA-Z0-9_-]+)', s)
+    if m:
+        return m.group(1)
+    m = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', s)
+    if m:
+        return m.group(1)
+    return s
+
+
 def get_checkpoint_files(tag: str, seed: int):
     """Find all valid checkpoint files for a model tag and seed."""
     candidates = [
@@ -220,8 +240,9 @@ def upload_checkpoints_to_drive(tag: str, seed: int, folder_id: str = None, cred
         print("\nFallback: Checkpoint zip bundle is ready in /kaggle/working for 1-click download!")
         return False
 
+    fid = clean_gdrive_id(fid)
     if not fid:
-        print("[!] No Google Drive folder ID provided. Pass --folder-id <ID> or set GDRIVE_CHECKPOINTS_FOLDER_ID.")
+        print("[!] No Google Drive folder ID provided. Pass --folder-id <ID_OR_URL> or set GDRIVE_CHECKPOINTS_FOLDER_ID.")
         return False
 
     print(f"\nConnecting to Google Drive folder: {fid} ...")
