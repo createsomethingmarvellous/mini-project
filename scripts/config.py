@@ -84,13 +84,35 @@ else:
 #   /kaggle/input/<slug>/noise*/           <- noise + RIRS
 #   /kaggle/input/<slug>/eval_*/           <- evaluation conditions
 
+def _kag_roots():
+    """
+    All meaningful roots to search inside /kaggle/input.
+    - Public datasets:  /kaggle/input/<dataset>/
+    - Private datasets: /kaggle/input/datasets/<user>/<dataset>/
+    Returns both the top-level entries AND any per-user dataset folders.
+    """
+    roots = []
+    kag = Path("/kaggle/input")
+    if not kag.exists():
+        return roots
+    roots.append(kag)
+    # Private datasets live under datasets/<user>/<dataset>/
+    priv = kag / "datasets"
+    if priv.exists():
+        for user_dir in priv.glob("*"):
+            if user_dir.is_dir():
+                roots.append(user_dir)
+                for ds_dir in user_dir.glob("*"):
+                    if ds_dir.is_dir():
+                        roots.append(ds_dir)  # e.g. /kaggle/input/datasets/anrayk/tarfiles
+    return roots
+
 def _kag_glob(*patterns):
-    """Fast: glob /kaggle/input at fixed shallow depths. Never walks audio files."""
-    if not Path("/kaggle/input").exists():
-        return []
+    """Fast: glob every /kaggle/input root at fixed shallow depths. Never walks audio files."""
     out = []
-    for pat in patterns:
-        out.extend(p for p in Path("/kaggle/input").glob(pat) if p.is_dir())
+    for root in _kag_roots():
+        for pat in patterns:
+            out.extend(p for p in root.glob(pat) if p.is_dir())
     return out
 
 # ASVspoof LA root — tarfiles layout is:

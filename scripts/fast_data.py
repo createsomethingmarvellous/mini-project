@@ -113,40 +113,58 @@ def _extract(tar, member):
         tar.extract(member, LOCAL)                  # older Python
 
 
+def _kag_roots():
+    """All /kaggle/input roots including private dataset paths (datasets/<user>/<name>/)."""
+    roots = []
+    kag = Path("/kaggle/input")
+    if not kag.exists():
+        return roots
+    roots.append(kag)
+    priv = kag / "datasets"
+    if priv.exists():
+        for user_dir in priv.glob("*"):
+            if user_dir.is_dir():
+                roots.append(user_dir)
+                for ds_dir in user_dir.glob("*"):
+                    if ds_dir.is_dir():
+                        roots.append(ds_dir)
+    return roots
+
+
 def is_already_available(name: str) -> bool:
     """Check if the dataset is already extracted in /kaggle/input (fast, no file scan)."""
-    if not Path("/kaggle/input").exists():
+    roots = _kag_roots()
+    if not roots:
         return False
-    kag = Path("/kaggle/input")
     if name == "asvspoof":
-        # tarfiles layout: <slug>/asvspoof-*/asvspoof2019/LA/LA
-        for pat in (
-            "*/asvspoof*/LA/LA",
-            "*/*/asvspoof*/LA/LA",    # ← tarfiles (1 extra nesting level)
-            "*/asvspoof2019/LA/LA",
-            "*/*/asvspoof2019/LA/LA", # ← tarfiles exact
-        ):
-            for p in kag.glob(pat):
-                if p.is_dir() and (
-                    (p / "ASVspoof2019_LA_cm_protocols").is_dir()
-                    or any(c.name.startswith("ASVspoof2019_LA") for c in p.iterdir() if c.is_dir())
-                ):
-                    return True
+        for root in roots:
+            for pat in (
+                "*/asvspoof*/LA/LA",
+                "*/*/asvspoof*/LA/LA",
+                "*/asvspoof2019/LA/LA",
+                "*/*/asvspoof2019/LA/LA",
+            ):
+                for p in root.glob(pat):
+                    if p.is_dir() and (
+                        (p / "ASVspoof2019_LA_cm_protocols").is_dir()
+                        or any(c.name.startswith("ASVspoof2019_LA") for c in p.iterdir() if c.is_dir())
+                    ):
+                        return True
     elif name == "train_aug":
-        for pat in ("*/train_aug", "*/generated/train_aug"):
-            for p in kag.glob(pat):
-                if p.is_dir():
+        for root in roots:
+            for pat in ("*/train_aug", "*/generated/train_aug"):
+                if any(root.glob(pat)):
                     return True
     elif name == "noise":
-        for pat in ("*/noise*/noise_train", "*/noise_train", "*/MS-SNSD/noise_train"):
-            for p in kag.glob(pat):
-                if p.is_dir():
+        for root in roots:
+            for pat in ("*/noise*/noise_train", "*/noise_train", "*/MS-SNSD/noise_train"):
+                if any(root.glob(pat)):
                     return True
     elif name.startswith("eval_"):
         cond_prefix = name.replace("eval_", "")
-        for pat in (f"*/{cond_prefix}_snr*", f"*/{name}"):
-            for p in kag.glob(pat):
-                if p.is_dir():
+        for root in roots:
+            for pat in (f"*/{cond_prefix}_snr*", f"*/{name}"):
+                if any(root.glob(pat)):
                     return True
     return False
 

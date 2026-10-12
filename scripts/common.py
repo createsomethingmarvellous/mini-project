@@ -21,8 +21,8 @@ PROTOCOL_NAMES = {
 def la_root() -> Path:
     """
     Folder that holds ASVspoof2019_LA_train/dev/eval and the protocols.
-    Uses fast shallow glob in /kaggle/input instead of slow rglob.
-    tarfiles dataset layout: /kaggle/input/tarfiles/asvspoof-003/asvspoof2019/LA/LA/
+    Searches /kaggle/input including private dataset paths (datasets/<user>/<name>/).
+    Actual tarfiles path: /kaggle/input/datasets/anrayk/tarfiles/asvspoof-003/asvspoof2019/LA/LA/
     """
     name = "ASVspoof2019_LA_cm_protocols"
 
@@ -31,27 +31,38 @@ def la_root() -> Path:
         if sdir.exists() and (sdir / name).is_dir():
             return sdir
 
-    # 2. Shallow glob in /kaggle/input at known depths (< 1 sec even for 15 GB datasets)
-    #    tarfiles layout is 4 levels deep: <slug>/<subfolder>/asvspoof*/LA/LA
+    # 2. Build all search roots (public + private /kaggle/input datasets)
+    kag_roots = []
     if Path("/kaggle/input").exists():
         kag = Path("/kaggle/input")
+        kag_roots.append(kag)
+        priv = kag / "datasets"
+        if priv.exists():
+            for user_dir in priv.glob("*"):
+                if user_dir.is_dir():
+                    kag_roots.append(user_dir)
+                    for ds_dir in user_dir.glob("*"):
+                        if ds_dir.is_dir():
+                            kag_roots.append(ds_dir)
+
+    # 3. Shallow glob from every root — patterns match the known tarfiles nesting
+    for root in kag_roots:
         for pat in (
-            "*/asvspoof*/LA/LA",       # <slug>/asvspoof*/LA/LA
-            "*/*/asvspoof*/LA/LA",     # <slug>/<subfolder>/asvspoof*/LA/LA  ← tarfiles
+            "*/asvspoof*/LA/LA",
+            "*/*/asvspoof*/LA/LA",
             "*/asvspoof2019/LA/LA",
-            "*/*/asvspoof2019/LA/LA",  # ← tarfiles exact path
+            "*/*/asvspoof2019/LA/LA",
             "*/asvspoof*/LA",
             "*/*/asvspoof*/LA",
-            "*/*/*/*/LA",              # depth-4 wildcard fallback
+            "*/*/*/*/LA",
         ):
-            for p in kag.glob(pat):
+            for p in root.glob(pat):
                 if p.is_dir() and (p / name).is_dir():
                     return p
 
-    # 3. Depth-limited search in local dirs
+    # 4. Depth-limited fallback in local dirs + /kaggle/input top-level subdirs
     search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
-    if Path("/kaggle/input").exists():
-        search_dirs += [d for d in Path("/kaggle/input").glob("*") if d.is_dir()]
+    search_dirs += kag_roots
     for sdir in search_dirs:
         if not sdir.exists():
             continue
