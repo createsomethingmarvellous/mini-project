@@ -45,13 +45,14 @@ def training_files(clean_only: bool):
     if not clean_only:
         aug_protocol = config.TRAIN_AUG_DIR / "protocol_aug.txt"
         if not aug_protocol.exists():
-            cand_protocols = list(config.LOCAL_DATA.rglob("protocol_aug.txt"))
+            search_bases = [config.LOCAL_DATA]
             if Path("/kaggle/input").exists():
-                cand_protocols += list(Path("/kaggle/input").rglob("protocol_aug.txt"))
-            if cand_protocols:
-                aug_protocol = cand_protocols[0]
+                search_bases.append(Path("/kaggle/input"))
+            hit = common.find_file_fast("protocol_aug.txt", search_bases)
+            if hit is not None:
+                aug_protocol = hit
             else:
-                sys.exit(f"ERROR: augmented training set missing ({aug_protocol}). Run T9 or unpack train_aug.tar first.")
+                sys.exit(f"ERROR: augmented training set missing ({aug_protocol}). Run T9 or attach train_aug dataset first.")
         aug_rows = read_protocol(aug_protocol)
         aug_dir = aug_protocol.parent
         aug_flac = aug_dir / "flac" if (aug_dir / "flac").exists() else aug_dir
