@@ -24,27 +24,38 @@ def la_root() -> Path:
     Found by searching across ASVSPOOF_DIR, LOCAL_DATA, and any Kaggle input folders.
     """
     name = "ASVspoof2019_LA_cm_protocols"
-
-    # 1. Fast directory walk of /kaggle/input (inspects folder names only, takes < 0.1s)
-    if Path("/kaggle/input").exists():
-        for root, dirs, _ in os.walk("/kaggle/input"):
-            if name in dirs:
-                return Path(root)
-
-    # 2. Check local data directories
     search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
+    if Path("/kaggle/input").exists():
+        search_dirs.extend([d for d in Path("/kaggle/input").glob("*") if d.is_dir()])
+        search_dirs.append(Path("/kaggle/input"))
     for sdir in search_dirs:
-        if sdir and sdir.exists():
-            for root, dirs, _ in os.walk(str(sdir)):
-                if name in dirs:
-                    return Path(root)
-
-    return None
+        if not sdir.exists():
+            continue
+        if (sdir / name).is_dir():
+            return sdir
+        try:
+            for hit in sdir.rglob(name):
+                if hit.is_dir():
+                    return hit.parent
+        except Exception:
+            pass
+    sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under any candidate path. "
+             f"Checked: {[str(d) for d in search_dirs if d.exists()]}. Finish T2 / unpack asvspoof first.")
 
 
 def split_dir(split: str) -> Path:
     """Folder that contains flac/ for a split: train, dev or eval."""
-    return la_root() / f"ASVspoof2019_LA_{split}"
+    root = la_root()
+    direct = root / f"ASVspoof2019_LA_{split}"
+    if direct.exists():
+        return direct
+    try:
+        for match in root.rglob(f"ASVspoof2019_LA_{split}"):
+            if match.is_dir():
+                return match
+    except Exception:
+        pass
+    return direct
 
 
 def protocol_path(split: str) -> Path:
@@ -78,7 +89,19 @@ def condition_dir(condition: str) -> Path:
     """Folder containing flac/ for a test condition."""
     if condition in ("clean", "clean_subset"):
         return split_dir("eval")
-    return config.EVAL_CONDITIONS_DIR / condition
+    cand = config.EVAL_CONDITIONS_DIR / condition
+    if (cand / "flac").exists() or (cand.is_dir() and list(cand.glob("*.flac"))):
+        return cand
+    if cand.exists():
+        return cand
+    if Path("/kaggle/input").exists():
+        try:
+            for d in Path("/kaggle/input").rglob(condition):
+                if d.is_dir() and ((d / "flac").exists() or list(d.glob("*.flac")) or (d.parent.name == "eval")):
+                    return d
+        except Exception:
+            pass
+    return cand
 
 
 def seed_everything(seed: int) -> None:

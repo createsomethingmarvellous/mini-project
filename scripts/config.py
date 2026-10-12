@@ -61,8 +61,7 @@ def _first_existing(candidates, default):
 # Intelligent path resolution across Kaggle / Colab / Drive
 KAG_INPUTS = list(Path("/kaggle/input").glob("*")) if Path("/kaggle/input").exists() else []
 KAG_SUBDIRS = [d for d in Path("/kaggle/input").glob("*/*") if d.is_dir()] if Path("/kaggle/input").exists() else []
-KAG_DEEP_DIRS = [d for d in Path("/kaggle/input").glob("*/*/*") if d.is_dir()] if Path("/kaggle/input").exists() else []
-ALL_KAG_DIRS = KAG_INPUTS + KAG_SUBDIRS + KAG_DEEP_DIRS
+ALL_KAG_DIRS = KAG_INPUTS + KAG_SUBDIRS
 
 # Archive directory (check Drive, local working dir, or any Kaggle input dataset folder)
 ARCHIVE_DIR = _first_existing(
@@ -79,20 +78,41 @@ else:
     DATA_BASE = BASE
 
 # Downloaded inputs (auto-finds ASVspoof, MS-SNSD, RIRS across Kaggle inputs & Drive)
+_asv_found = []
+if Path("/kaggle/input").exists():
+    try:
+        _asv_found = [p.parent for p in Path("/kaggle/input").rglob("ASVspoof2019_LA_cm_protocols") if p.is_dir()]
+    except Exception:
+        pass
+
 ASVSPOOF_DIR = _first_existing(
+    _asv_found +
     [LOCAL_DATA / "asvspoof2019", LOCAL_DATA / "ASVspoof2019", DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
     [k / "asvspoof2019" for k in ALL_KAG_DIRS] + [k / "ASVspoof2019" for k in ALL_KAG_DIRS] +
     [k for k in ALL_KAG_DIRS if "asvspoof" in k.name.lower() and not k.name.endswith(".tar")],
     LOCAL_DATA / "asvspoof2019"
 )
 
+_noise_train_found = []
+_rirs_found = []
+if Path("/kaggle/input").exists():
+    try:
+        _noise_train_found = [p for p in Path("/kaggle/input").rglob("noise_train") if p.is_dir()]
+        _rirs_found = [p for p in Path("/kaggle/input").rglob("simulated_rirs") if p.is_dir()]
+    except Exception:
+        pass
+
 MSSNSD_DIR = _first_existing(
-    [LOCAL_DATA / "MS-SNSD", DATA_BASE / "MS-SNSD"] + [k / "MS-SNSD" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "ms-snsd" in k.name.lower() or "mssnsd" in k.name.lower()],
+    ([p.parent for p in _noise_train_found] if _noise_train_found else []) +
+    [LOCAL_DATA / "MS-SNSD", DATA_BASE / "MS-SNSD"] + [k / "MS-SNSD" for k in ALL_KAG_DIRS] +
+    [k for k in ALL_KAG_DIRS if "ms-snsd" in k.name.lower() or "mssnsd" in k.name.lower() or "noise" in k.name.lower()],
     LOCAL_DATA / "MS-SNSD"
 )
 
 RIRS_DIR = _first_existing(
-    [LOCAL_DATA / "RIRS_NOISES", DATA_BASE / "RIRS_NOISES"] + [k / "RIRS_NOISES" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "rirs" in k.name.lower()],
+    ([p.parent for p in _rirs_found] if _rirs_found else []) +
+    [LOCAL_DATA / "RIRS_NOISES", DATA_BASE / "RIRS_NOISES"] + [k / "RIRS_NOISES" for k in ALL_KAG_DIRS] +
+    [k for k in ALL_KAG_DIRS if "rirs" in k.name.lower()],
     LOCAL_DATA / "RIRS_NOISES"
 )
 
@@ -106,14 +126,25 @@ AASIST_DIR = _first_existing(
 MODEL_A_WEIGHTS = AASIST_DIR / "models" / "weights" / "AASIST.pth"
 
 # Train and test noise paths
-NOISE_TRAIN_DIR = MSSNSD_DIR / "noise_train"
-NOISE_TEST_DIR = MSSNSD_DIR / "noise_test"
-RIR_DIR = RIRS_DIR / "simulated_rirs"
+NOISE_TRAIN_DIR = _noise_train_found[0] if _noise_train_found else MSSNSD_DIR / "noise_train"
+NOISE_TEST_DIR = (NOISE_TRAIN_DIR.parent / "noise_test") if _noise_train_found else MSSNSD_DIR / "noise_test"
+RIR_DIR = _rirs_found[0] if _rirs_found else RIRS_DIR / "simulated_rirs"
 
 # Generated data (noisy / enhanced / train_aug)
 GENERATED_DIR = LOCAL_DATA / "generated" if (LOCAL_DATA / "generated").exists() else DATA_BASE / "generated"
 EVAL_CONDITIONS_DIR = GENERATED_DIR / "eval"
+
+_train_aug_found = []
+if Path("/kaggle/input").exists():
+    try:
+        _train_aug_found = [p.parent for p in Path("/kaggle/input").rglob("protocol_aug.txt")]
+        if not _train_aug_found:
+            _train_aug_found = [p for p in Path("/kaggle/input").rglob("train_aug") if p.is_dir()]
+    except Exception:
+        pass
+
 TRAIN_AUG_DIR = _first_existing(
+    _train_aug_found +
     [LOCAL_DATA / "generated" / "train_aug", DATA_BASE / "generated" / "train_aug", BASE / "generated" / "train_aug"] +
     [k / "generated" / "train_aug" for k in ALL_KAG_DIRS] +
     [k / "train_aug" for k in ALL_KAG_DIRS] +

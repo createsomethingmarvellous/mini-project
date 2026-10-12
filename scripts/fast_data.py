@@ -19,7 +19,6 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -41,41 +40,30 @@ ARCHIVES = {
 }
 
 
-_ARCHIVE_CACHE = {}
-
-
 def archive_path(name: str) -> Path:
-    if name in _ARCHIVE_CACHE:
-        return _ARCHIVE_CACHE[name]
-
     # 1. Direct match in ARCHIVE_DIR
     p = config.ARCHIVE_DIR / f"{name}.tar"
     if p.exists():
-        _ARCHIVE_CACHE[name] = p
         return p
-
     # 2. Direct match in BASE / archives
     p = config.BASE / "archives" / f"{name}.tar"
     if p.exists():
-        _ARCHIVE_CACHE[name] = p
         return p
-
-    # 3. Fast shallow search in /kaggle/input (top 2 levels only — NEVER rglob over 150k audio files!)
+    # 3. Check recursively in all /kaggle/input datasets
     if Path("/kaggle/input").exists():
-        candidates = (
-            list(Path("/kaggle/input").glob(f"*/{name}.tar"))
-            + list(Path("/kaggle/input").glob(f"*/archives/{name}.tar"))
-            + list(Path("/kaggle/input").glob(f"*/*/{name}.tar"))
-            + list(Path("/kaggle/input").glob(f"*/{name}.tar.gz"))
-            + list(Path("/kaggle/input").glob(f"*/archives/{name}.tar.gz"))
-        )
-        if candidates:
-            _ARCHIVE_CACHE[name] = candidates[0]
-            return candidates[0]
-
-    res = config.ARCHIVE_DIR / f"{name}.tar"
-    _ARCHIVE_CACHE[name] = res
-    return res
+        matches = list(Path("/kaggle/input").rglob(f"{name}.tar"))
+        if matches:
+            return matches[0]
+        # Also check for .tar.gz
+        gz_matches = list(Path("/kaggle/input").rglob(f"{name}.tar.gz"))
+        if gz_matches:
+            return gz_matches[0]
+        # Partial match
+        clean_name = name.replace("_", "").lower()
+        for cand in Path("/kaggle/input").rglob("*.tar"):
+            if cand.stem.replace("_", "").replace("-", "").lower() == clean_name:
+                return cand
+    return config.ARCHIVE_DIR / f"{name}.tar"
 
 
 def info_path(name: str) -> Path:
@@ -125,25 +113,44 @@ def _extract(tar, member):
         tar.extract(member, LOCAL)                  # older Python
 
 
+def is_already_available(name: str) -> bool:
+    """Check if the dataset is already extracted and present in /kaggle/input."""
+    if Path("/kaggle/input").exists():
+        if name == "asvspoof":
+            try:
+                if list(Path("/kaggle/input").rglob("ASVspoof2019_LA_cm_protocols")):
+                    return True
+            except Exception:
+                pass
+        elif name == "train_aug":
+            try:
+                if list(Path("/kaggle/input").rglob("protocol_aug.txt")):
+                    return True
+            except Exception:
+                pass
+        elif name == "noise":
+            try:
+                if list(Path("/kaggle/input").rglob("noise_train")):
+                    return True
+            except Exception:
+                pass
+        elif name.startswith("eval_"):
+            cond_prefix = name.replace("eval_", "")
+            try:
+                if [d for d in Path("/kaggle/input").rglob(f"{cond_prefix}_snr*") if d.is_dir()]:
+                    return True
+            except Exception:
+                pass
+    return False
+
+
 def unpack(name: str, delete_archive: bool = False, force: bool = False) -> None:
-    # Quick check: if dataset is already present uncompressed (e.g. attached Kaggle dataset)
-    if name == "asvspoof":
-        try:
-            import common
-            la = common.la_root()
-            if la and ((la / "ASVspoof2019_LA_train").exists() or (la / "ASVspoof2019_LA_cm_protocols").exists()):
-                print(f"  asvspoof         already available on disk at {la} (skipping unpack)")
-                return
-        except Exception:
-            pass
-
-    if name == "train_aug" and (config.TRAIN_AUG_DIR / "protocol_aug.txt").exists():
-        print(f"  train_aug        already available at {config.TRAIN_AUG_DIR} (skipping unpack)")
+    if is_already_available(name):
+        print(f"  {name:<16} detected pre-extracted in /kaggle/input (0 MB local disk used!)")
         return
-
     arch = archive_path(name)
     if not arch.exists():
-        print(f"  {name:<16} archive not found ({arch}) - skipped")
+        print(f"  {name:<16} no archive on Drive yet - skipped")
         return
     marker = marker_path(name)
     if marker.exists() and json.loads(marker.read_text()) == _stamp(name):
@@ -161,25 +168,10 @@ def unpack(name: str, delete_archive: bool = False, force: bool = False) -> None
         count = json.loads(info_path(name).read_text()).get("files")
     LOCAL.mkdir(parents=True, exist_ok=True)
     stamp = _stamp(name)
-
-    # Use high-speed native system tar if available (~30s vs 12+ mins in pure Python)
-    tar_bin = shutil.which("tar")
-    extracted_via_sys = False
-    if tar_bin:
-        try:
-            print(f"  Unpacking {name} using high-speed system tar...")
-            subprocess.run([tar_bin, "-xf", str(arch), "-C", str(LOCAL)], check=True)
-            extracted_via_sys = True
-            print(f"  {name:<16} unpacked successfully via system tar.")
-        except Exception as e:
-            print(f"  System tar encountered an issue ({e}), falling back to Python tarfile...")
-
-    if not extracted_via_sys:
-        with tarfile.open(arch, "r|") as tar:
-            for member in tqdm(tar, total=count, unit="file", desc=f"unpack {name}",
-                               mininterval=5):
-                _extract(tar, member)
-
+    with tarfile.open(arch, "r|") as tar:
+        for member in tqdm(tar, total=count, unit="file", desc=f"unpack {name}",
+                           mininterval=5):
+            _extract(tar, member)
     marker.write_text(json.dumps(stamp))
     if delete_archive:
         try:
@@ -193,8 +185,13 @@ def status() -> None:
     print(f"Local data folder: {LOCAL}")
     for name in ARCHIVES:
         arch = archive_path(name)
-        on_drive = f"{arch.stat().st_size / 1e9:6.2f} GB on Drive" if arch.exists() else "   not on Drive"
-        local = "unpacked" if marker_path(name).exists() else "-"
+        on_drive = f"{arch.stat().st_size / 1e9:6.2f} GB on Drive/Input" if arch.exists() else "   not on Drive"
+        if is_already_available(name):
+            local = "/kaggle/input (ready)"
+        elif marker_path(name).exists():
+            local = "unpacked"
+        else:
+            local = "-"
         print(f"  {name:<16} {on_drive}   local: {local}")
 
 
