@@ -93,12 +93,17 @@ def _kag_glob(*patterns):
         out.extend(p for p in Path("/kaggle/input").glob(pat) if p.is_dir())
     return out
 
-# ASVspoof LA root (protocols folder sits directly inside this dir)
+# ASVspoof LA root — tarfiles layout is:
+#   /kaggle/input/tarfiles/asvspoof-003/asvspoof2019/LA/LA/
+# Patterns at both 3-level and 4-level depth to handle any dataset slug:
 _asv_la = _kag_glob(
-    "*/asvspoof*/LA/LA",
-    "*/asvspoof2019/LA/LA",
+    "*/asvspoof*/LA/LA",          # <slug>/asvspoof*/LA/LA
+    "*/*/asvspoof*/LA/LA",        # <slug>/<subfolder>/asvspoof*/LA/LA  ← tarfiles
+    "*/asvspoof2019/LA/LA",       # <slug>/asvspoof2019/LA/LA
+    "*/*/asvspoof2019/LA/LA",     # <slug>/<subfolder>/asvspoof2019/LA/LA ← tarfiles
     "*/asvspoof*/LA",
-    "*/asvspoof2019/LA",
+    "*/*/asvspoof*/LA",
+    "*/*/*/*/LA",                  # wildcard fallback at depth 4
 )
 _asv_found = [
     p for p in _asv_la

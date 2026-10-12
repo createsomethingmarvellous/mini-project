@@ -119,8 +119,13 @@ def is_already_available(name: str) -> bool:
         return False
     kag = Path("/kaggle/input")
     if name == "asvspoof":
-        # Check known shallow paths only — never scan audio files
-        for pat in ("*/asvspoof*/LA/LA", "*/asvspoof2019/LA/LA", "*/asvspoof*/LA"):
+        # tarfiles layout: <slug>/asvspoof-*/asvspoof2019/LA/LA
+        for pat in (
+            "*/asvspoof*/LA/LA",
+            "*/*/asvspoof*/LA/LA",    # ← tarfiles (1 extra nesting level)
+            "*/asvspoof2019/LA/LA",
+            "*/*/asvspoof2019/LA/LA", # ← tarfiles exact
+        ):
             for p in kag.glob(pat):
                 if p.is_dir() and (
                     (p / "ASVspoof2019_LA_cm_protocols").is_dir()

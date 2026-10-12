@@ -22,6 +22,7 @@ def la_root() -> Path:
     """
     Folder that holds ASVspoof2019_LA_train/dev/eval and the protocols.
     Uses fast shallow glob in /kaggle/input instead of slow rglob.
+    tarfiles dataset layout: /kaggle/input/tarfiles/asvspoof-003/asvspoof2019/LA/LA/
     """
     name = "ASVspoof2019_LA_cm_protocols"
 
@@ -31,20 +32,30 @@ def la_root() -> Path:
             return sdir
 
     # 2. Shallow glob in /kaggle/input at known depths (< 1 sec even for 15 GB datasets)
+    #    tarfiles layout is 4 levels deep: <slug>/<subfolder>/asvspoof*/LA/LA
     if Path("/kaggle/input").exists():
         kag = Path("/kaggle/input")
-        for pat in ("*/asvspoof*/LA/LA", "*/asvspoof2019/LA/LA",
-                    "*/asvspoof*/LA", "*/asvspoof2019/LA", "*/*/*/LA"):
+        for pat in (
+            "*/asvspoof*/LA/LA",       # <slug>/asvspoof*/LA/LA
+            "*/*/asvspoof*/LA/LA",     # <slug>/<subfolder>/asvspoof*/LA/LA  ← tarfiles
+            "*/asvspoof2019/LA/LA",
+            "*/*/asvspoof2019/LA/LA",  # ← tarfiles exact path
+            "*/asvspoof*/LA",
+            "*/*/asvspoof*/LA",
+            "*/*/*/*/LA",              # depth-4 wildcard fallback
+        ):
             for p in kag.glob(pat):
                 if p.is_dir() and (p / name).is_dir():
                     return p
 
-    # 3. General search in config dirs (not rglob — depth-limited)
+    # 3. Depth-limited search in local dirs
     search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
+    if Path("/kaggle/input").exists():
+        search_dirs += [d for d in Path("/kaggle/input").glob("*") if d.is_dir()]
     for sdir in search_dirs:
         if not sdir.exists():
             continue
-        for depth in range(1, 5):
+        for depth in range(1, 6):
             for hit in sdir.glob("/".join(["*"] * depth + [name])):
                 if hit.is_dir():
                     return hit.parent
