@@ -41,30 +41,41 @@ ARCHIVES = {
 }
 
 
+_ARCHIVE_CACHE = {}
+
+
 def archive_path(name: str) -> Path:
+    if name in _ARCHIVE_CACHE:
+        return _ARCHIVE_CACHE[name]
+
     # 1. Direct match in ARCHIVE_DIR
     p = config.ARCHIVE_DIR / f"{name}.tar"
     if p.exists():
+        _ARCHIVE_CACHE[name] = p
         return p
+
     # 2. Direct match in BASE / archives
     p = config.BASE / "archives" / f"{name}.tar"
     if p.exists():
+        _ARCHIVE_CACHE[name] = p
         return p
-    # 3. Check recursively in all /kaggle/input datasets
+
+    # 3. Fast shallow search in /kaggle/input (top 2 levels only — NEVER rglob over 150k audio files!)
     if Path("/kaggle/input").exists():
-        matches = list(Path("/kaggle/input").rglob(f"{name}.tar"))
-        if matches:
-            return matches[0]
-        # Also check for .tar.gz
-        gz_matches = list(Path("/kaggle/input").rglob(f"{name}.tar.gz"))
-        if gz_matches:
-            return gz_matches[0]
-        # Partial match
-        clean_name = name.replace("_", "").lower()
-        for cand in Path("/kaggle/input").rglob("*.tar"):
-            if cand.stem.replace("_", "").replace("-", "").lower() == clean_name:
-                return cand
-    return config.ARCHIVE_DIR / f"{name}.tar"
+        candidates = (
+            list(Path("/kaggle/input").glob(f"*/{name}.tar"))
+            + list(Path("/kaggle/input").glob(f"*/archives/{name}.tar"))
+            + list(Path("/kaggle/input").glob(f"*/*/{name}.tar"))
+            + list(Path("/kaggle/input").glob(f"*/{name}.tar.gz"))
+            + list(Path("/kaggle/input").glob(f"*/archives/{name}.tar.gz"))
+        )
+        if candidates:
+            _ARCHIVE_CACHE[name] = candidates[0]
+            return candidates[0]
+
+    res = config.ARCHIVE_DIR / f"{name}.tar"
+    _ARCHIVE_CACHE[name] = res
+    return res
 
 
 def info_path(name: str) -> Path:
@@ -115,9 +126,24 @@ def _extract(tar, member):
 
 
 def unpack(name: str, delete_archive: bool = False, force: bool = False) -> None:
+    # Quick check: if dataset is already present uncompressed (e.g. attached Kaggle dataset)
+    if name == "asvspoof":
+        try:
+            import common
+            la = common.la_root()
+            if la and ((la / "ASVspoof2019_LA_train").exists() or (la / "ASVspoof2019_LA_cm_protocols").exists()):
+                print(f"  asvspoof         already available on disk at {la} (skipping unpack)")
+                return
+        except Exception:
+            pass
+
+    if name == "train_aug" and (config.TRAIN_AUG_DIR / "protocol_aug.txt").exists():
+        print(f"  train_aug        already available at {config.TRAIN_AUG_DIR} (skipping unpack)")
+        return
+
     arch = archive_path(name)
     if not arch.exists():
-        print(f"  {name:<16} no archive on Drive yet - skipped")
+        print(f"  {name:<16} archive not found ({arch}) - skipped")
         return
     marker = marker_path(name)
     if marker.exists() and json.loads(marker.read_text()) == _stamp(name):
