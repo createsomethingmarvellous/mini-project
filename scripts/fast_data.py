@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -134,10 +135,25 @@ def unpack(name: str, delete_archive: bool = False, force: bool = False) -> None
         count = json.loads(info_path(name).read_text()).get("files")
     LOCAL.mkdir(parents=True, exist_ok=True)
     stamp = _stamp(name)
-    with tarfile.open(arch, "r|") as tar:
-        for member in tqdm(tar, total=count, unit="file", desc=f"unpack {name}",
-                           mininterval=5):
-            _extract(tar, member)
+
+    # Use high-speed native system tar if available (~30s vs 12+ mins in pure Python)
+    tar_bin = shutil.which("tar")
+    extracted_via_sys = False
+    if tar_bin:
+        try:
+            print(f"  Unpacking {name} using high-speed system tar...")
+            subprocess.run([tar_bin, "-xf", str(arch), "-C", str(LOCAL)], check=True)
+            extracted_via_sys = True
+            print(f"  {name:<16} unpacked successfully via system tar.")
+        except Exception as e:
+            print(f"  System tar encountered an issue ({e}), falling back to Python tarfile...")
+
+    if not extracted_via_sys:
+        with tarfile.open(arch, "r|") as tar:
+            for member in tqdm(tar, total=count, unit="file", desc=f"unpack {name}",
+                               mininterval=5):
+                _extract(tar, member)
+
     marker.write_text(json.dumps(stamp))
     if delete_archive:
         try:
