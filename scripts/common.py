@@ -24,25 +24,22 @@ def la_root() -> Path:
     Found by searching across ASVSPOOF_DIR, LOCAL_DATA, and any Kaggle input folders.
     """
     name = "ASVspoof2019_LA_cm_protocols"
-    search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
+
+    # 1. Fast directory walk of /kaggle/input (inspects folder names only, takes < 0.1s)
     if Path("/kaggle/input").exists():
-        search_dirs.append(Path("/kaggle/input"))
-        search_dirs.extend([d for d in Path("/kaggle/input").glob("*") if d.is_dir()])
-        search_dirs.extend([d for d in Path("/kaggle/input").glob("*/*") if d.is_dir()])
-        search_dirs.extend([d for d in Path("/kaggle/input").glob("*/*/*") if d.is_dir()])
+        for root, dirs, _ in os.walk("/kaggle/input"):
+            if name in dirs:
+                return Path(root)
 
+    # 2. Check local data directories
+    search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
     for sdir in search_dirs:
-        if not sdir.exists():
-            continue
-        for depth in range(6):
-            hits = sorted(sdir.glob("/".join(["*"] * depth + [name])))
-            if hits:
-                return hits[0].parent
+        if sdir and sdir.exists():
+            for root, dirs, _ in os.walk(str(sdir)):
+                if name in dirs:
+                    return Path(root)
 
-    raise FileNotFoundError(
-        f"ERROR: no {name} folder under any candidate path. "
-        f"Checked: {[str(d) for d in search_dirs if d.exists()]}. Finish T2 / unpack asvspoof first."
-    )
+    return None
 
 
 def split_dir(split: str) -> Path:
