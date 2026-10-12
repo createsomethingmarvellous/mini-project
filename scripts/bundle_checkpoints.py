@@ -1,96 +1,147 @@
 """
-Utility script to verify, inspect, and bundle trained model checkpoints
-into a downloadable zip file on Kaggle or Colab.
+Bundle one trained run, its score files, and generated summary tables for review.
 
 Usage:
-    python scripts/bundle_checkpoints.py
+    python scripts/bundle_checkpoints.py --tag B --seed 123
 """
 
-import os
+import argparse
+import json
 import sys
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
-# Add scripts directory to path for config
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    import config
-    default_ckpt_dir = config.CHECKPOINT_DIR
-except Exception:
-    default_ckpt_dir = Path("checkpoints")
+import config
 
-def bundle_checkpoints(output_zip: Path = None):
-    # Candidate locations for checkpoints directory
-    candidates = [
-        default_ckpt_dir,
-        Path("/kaggle/working/mini_project/checkpoints"),
-        Path("/kaggle/working/checkpoints"),
-        Path("./checkpoints"),
-        Path("./data/checkpoints"),
-    ]
-    
-    ckpt_dir = None
-    for cand in candidates:
-        if cand.exists() and any(cand.rglob("*.pth")) or any(cand.rglob("*.pt")):
-            ckpt_dir = cand
-            break
-            
-    if ckpt_dir is None:
-        for cand in candidates:
-            if cand.exists():
-                ckpt_dir = cand
-                break
-                
-    if ckpt_dir is None or not ckpt_dir.exists():
-        print(f"[!] Checkpoint directory not found among candidates: {[str(c) for c in candidates]}")
-        return None
 
-    # Search for all checkpoint files (.pth, .pt, .txt, .json)
-    files_to_bundle = []
-    for ext in ["*.pth", "*.pt", "*.txt", "*.json"]:
-        files_to_bundle.extend(list(ckpt_dir.rglob(ext)))
+def bundle_checkpoints(output_zip: Path = None, tag: str = None, seed: int = None) -> Path:
+    if (tag is None) != (seed is None):
+        raise ValueError("Specify both tag and seed, or neither.")
 
-    if not files_to_bundle:
-        print(f"[!] No checkpoint files (.pth / .pt / .txt) found under: {ckpt_dir}")
-        print("    Make sure training has completed at least one epoch or save interval.")
-        return None
+    if tag is not None:
+        run_name = f"{tag}_seed{seed}"
+        checkpoint_dir = config.CHECKPOINT_DIR / run_name
+        if not checkpoint_dir.is_dir():
+            raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+        checkpoint_files = sorted(
+            path for path in checkpoint_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in {".pth", ".pt", ".txt", ".json"}
+        )
+    else:
+        run_name = "all_runs"
+        candidates = [
+            config.CHECKPOINT_DIR,
+            Path("/kaggle/working/mini_project/checkpoints"),
+            Path("/kaggle/working/checkpoints"),
+            Path("./checkpoints"),
+            Path("./data/checkpoints"),
+        ]
+        checkpoint_dir = next(
+            (path for path in candidates
+             if path.is_dir() and any(path.rglob("*.pth"))),
+            None,
+        )
+        if checkpoint_dir is None:
+            raise FileNotFoundError(f"No checkpoint directory found among: {candidates}")
+        checkpoint_files = sorted(
+            path for path in checkpoint_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() in {".pth", ".pt", ".txt", ".json"}
+        )
 
-    # Output zip location
+    if not checkpoint_files:
+        raise FileNotFoundError(f"No checkpoint or training log files found in {checkpoint_dir}")
+    if not (checkpoint_dir / "swa.pth").is_file():
+        raise FileNotFoundError(f"Final SWA weights are missing: {checkpoint_dir / 'swa.pth'}")
+
+    score_root = config.SCORES_DIR
+    score_files = sorted(score_root.glob("*/*.txt")) if score_root.exists() else []
+    run_score_files = (
+        [path for path in score_files if path.parent.name == run_name]
+        if tag is not None else score_files
+    )
+    expected_conditions = config.eval_conditions()
+    scored_conditions = {path.stem for path in run_score_files}
+    missing_conditions = (
+        [name for name in expected_conditions if name not in scored_conditions]
+        if tag is not None else []
+    )
+
+    results_root = config.RESULTS_DIR
+    summary_files = (
+        sorted(path for path in results_root.iterdir()
+               if path.is_file() and path.suffix.lower() in {".md", ".csv"})
+        if results_root.exists() else []
+    )
+    expected_tables = {
+        "main_table.md", "main_table.csv",
+        "per_snr_table.md", "per_snr_table.csv",
+        "per_attack_table.md", "per_attack_table.csv",
+    }
+    missing_tables = sorted(expected_tables - {path.name for path in summary_files})
+
     if output_zip is None:
-        if Path("/kaggle/working").exists():
-            output_zip = Path("/kaggle/working/checkpoints_bundle.zip")
-        else:
-            output_zip = Path("./checkpoints_bundle.zip")
-
+        output_root = Path("/kaggle/working") if Path("/kaggle/working").exists() else Path.cwd()
+        output_name = f"{run_name}_final_review.zip" if tag is not None else "checkpoints_bundle.zip"
+        output_zip = output_root / output_name
     output_zip.parent.mkdir(parents=True, exist_ok=True)
 
-    print("=" * 65)
-    print("           CHECKPOINT VERIFICATION & BUNDLING")
-    print("=" * 65)
-    print(f"Scanning directory: {ckpt_dir}\n")
+    manifest = {
+        "model": tag or "all",
+        "seed": seed,
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "checkpoint_files": [path.name for path in checkpoint_files],
+        "score_files": [
+            path.relative_to(score_root).as_posix() for path in score_files
+        ],
+        "expected_evaluation_conditions": expected_conditions,
+        "missing_evaluation_conditions_for_this_run": missing_conditions,
+        "summary_files": [path.name for path in summary_files],
+        "missing_summary_tables": missing_tables,
+        "evaluation_complete_for_this_run": not missing_conditions if tag is not None else None,
+        "summary_tables_complete": not missing_tables and not missing_conditions,
+    }
 
-    total_bytes = 0
-    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in sorted(set(files_to_bundle)):
-            rel_name = f.relative_to(ckpt_dir).as_posix()
-            size_mb = f.stat().st_size / 1e6
-            total_bytes += f.stat().st_size
-            zf.write(f, arcname=f"checkpoints/{rel_name}")
-            print(f"  + Packed: {rel_name:<35} ({size_mb:6.2f} MB)")
+    with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in checkpoint_files:
+            archive.write(path, arcname=f"checkpoints/{run_name}/{path.name}")
+        for path in score_files:
+            archive.write(path, arcname=f"scores/{path.relative_to(score_root).as_posix()}")
+        for path in summary_files:
+            archive.write(path, arcname=f"results/{path.name}")
+        archive.writestr("manifest.json", json.dumps(manifest, indent=2) + "\n")
 
-    zip_mb = output_zip.stat().st_size / 1e6
-    print("-" * 65)
-    print(f"Total files packed : {len(files_to_bundle)}")
-    print(f"Uncompressed size  : {total_bytes / 1e6:.2f} MB")
-    print(f"Compressed zip size: {zip_mb:.2f} MB")
-    print(f"Destination        : {output_zip.resolve()}")
-    print("=" * 65)
-    print("[SUCCESS] All checkpoints verified and bundled successfully!")
-    print("\nHow to download:")
-    print("1. In Kaggle UI right sidebar: Check 'Output' -> 'checkpoints_bundle.zip' -> Download")
-    print("2. Or click the FileLink rendered in the notebook cell below.")
-    
+    if missing_conditions:
+        print("WARNING: evaluation is incomplete for this seed; missing conditions:")
+        for condition in missing_conditions:
+            print(f"  - {condition}")
+    if missing_tables:
+        print("WARNING: summary tables missing:")
+        for table in missing_tables:
+            print(f"  - {table}")
+    elif missing_conditions:
+        print("WARNING: summary table files exist, but they may be incomplete because this seed is missing evaluation conditions.")
+
+    print(f"Review bundle created: {output_zip}")
+    print(f"  Checkpoint/training files: {len(checkpoint_files)}")
+    print(f"  Score files (all runs):   {len(score_files)}")
+    print(f"  Summary tables:           {len(summary_files)}")
+    print(f"  Evaluation complete:      {manifest['evaluation_complete_for_this_run']}")
+    print(f"  Summary tables complete:  {manifest['summary_tables_complete']}")
     return output_zip
 
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tag", choices=["B", "C"])
+    parser.add_argument("--seed", type=int, choices=config.SEEDS)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    if (args.tag is None) != (args.seed is None):
+        parser.error("--tag and --seed must be supplied together.")
+    bundle_checkpoints(args.output, args.tag, args.seed)
+
+
 if __name__ == "__main__":
-    bundle_checkpoints()
+    main()

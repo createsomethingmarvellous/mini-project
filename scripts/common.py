@@ -62,7 +62,7 @@ def la_root() -> Path:
     if hit is not None:
         return hit.parent
 
-    raise FileNotFoundError(
+    sys.exit(
         f"ERROR: no ASVspoof protocols folder found. "
         f"Checked: {[str(d) for d in roots if Path(d).exists()]}. "
         f"Run Step 2 to unpack asvspoof first."

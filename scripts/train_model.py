@@ -266,8 +266,7 @@ def main():
     # ---- final SWA model ---------------------------------------------------
     if not (run_dir / "swa.pth").exists():
         raw_m = get_raw_model(model)
-        swa_weights = state["swa"] if state["swa"] is not None else raw_m.state_dict()
-        raw_m.load_state_dict(swa_weights)
+        raw_m.load_state_dict(state["swa"])
         bn_loader = torch.utils.data.DataLoader(train_set, batch_size=bs,
                                                 num_workers=args.workers)
         print("Building the final SWA model (one pass over the training data) ...")
@@ -275,14 +274,6 @@ def main():
                                              mininterval=30), raw_m, device=device)
         torch.save(raw_m.state_dict(), run_dir / "swa.pth")
     print(f"Done. Final model: {run_dir / 'swa.pth'}")
-
-    # Auto-bundle checkpoints into zip for one-click Kaggle download
-    try:
-        from sync_to_drive import zip_checkpoints
-        zip_checkpoints(args.tag, args.seed)
-    except Exception as e:
-        print(f"Notice: auto-bundling checkpoints skipped: {e}")
-
 
 
 if __name__ == "__main__":
