@@ -77,30 +77,56 @@ elif (LOCAL_DATA / "asvspoof2019").exists() or (LOCAL_DATA / "ASVspoof2019").exi
 else:
     DATA_BASE = BASE
 
-# Downloaded inputs (auto-finds ASVspoof, MS-SNSD, RIRS across Kaggle inputs & Drive)
-_asv_found = []
-if Path("/kaggle/input").exists():
-    try:
-        _asv_found = [p.parent for p in Path("/kaggle/input").rglob("ASVspoof2019_LA_cm_protocols") if p.is_dir()]
-    except Exception:
-        pass
+# ── Fast Kaggle input detection: shallow glob only, < 2 sec total ────────────
+# Uses fixed-depth patterns matching the known tarfiles dataset layout:
+#   /kaggle/input/<slug>/asvspoof*/LA/LA/  <- ASVspoof LA root
+#   /kaggle/input/<slug>/train_aug/        <- augmented audio
+#   /kaggle/input/<slug>/noise*/           <- noise + RIRS
+#   /kaggle/input/<slug>/eval_*/           <- evaluation conditions
+
+def _kag_glob(*patterns):
+    """Fast: glob /kaggle/input at fixed shallow depths. Never walks audio files."""
+    if not Path("/kaggle/input").exists():
+        return []
+    out = []
+    for pat in patterns:
+        out.extend(p for p in Path("/kaggle/input").glob(pat) if p.is_dir())
+    return out
+
+# ASVspoof LA root (protocols folder sits directly inside this dir)
+_asv_la = _kag_glob(
+    "*/asvspoof*/LA/LA",
+    "*/asvspoof2019/LA/LA",
+    "*/asvspoof*/LA",
+    "*/asvspoof2019/LA",
+)
+_asv_found = [
+    p for p in _asv_la
+    if (p / "ASVspoof2019_LA_cm_protocols").is_dir()
+    or any(c.name.startswith("ASVspoof2019_LA") for c in p.iterdir() if c.is_dir())
+]
 
 ASVSPOOF_DIR = _first_existing(
     _asv_found +
-    [LOCAL_DATA / "asvspoof2019", LOCAL_DATA / "ASVspoof2019", DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
-    [k / "asvspoof2019" for k in ALL_KAG_DIRS] + [k / "ASVspoof2019" for k in ALL_KAG_DIRS] +
+    [LOCAL_DATA / "asvspoof2019", LOCAL_DATA / "ASVspoof2019",
+     DATA_BASE / "asvspoof2019", DATA_BASE / "ASVspoof2019"] +
+    [k / "asvspoof2019" for k in ALL_KAG_DIRS] +
+    [k / "ASVspoof2019" for k in ALL_KAG_DIRS] +
     [k for k in ALL_KAG_DIRS if "asvspoof" in k.name.lower() and not k.name.endswith(".tar")],
     LOCAL_DATA / "asvspoof2019"
 )
 
-_noise_train_found = []
-_rirs_found = []
-if Path("/kaggle/input").exists():
-    try:
-        _noise_train_found = [p for p in Path("/kaggle/input").rglob("noise_train") if p.is_dir()]
-        _rirs_found = [p for p in Path("/kaggle/input").rglob("simulated_rirs") if p.is_dir()]
-    except Exception:
-        pass
+# Noise (MS-SNSD noise_train) and RIRS (simulated_rirs) — shallow glob
+_noise_train_found = _kag_glob(
+    "*/noise*/noise_train",
+    "*/noise_train",
+    "*/MS-SNSD/noise_train",
+)
+_rirs_found = _kag_glob(
+    "*/noise*/RIRS_NOISES/simulated_rirs",
+    "*/RIRS_NOISES/simulated_rirs",
+    "*/simulated_rirs",
+)
 
 MSSNSD_DIR = _first_existing(
     ([p.parent for p in _noise_train_found] if _noise_train_found else []) +
@@ -134,14 +160,13 @@ RIR_DIR = _rirs_found[0] if _rirs_found else RIRS_DIR / "simulated_rirs"
 GENERATED_DIR = LOCAL_DATA / "generated" if (LOCAL_DATA / "generated").exists() else DATA_BASE / "generated"
 EVAL_CONDITIONS_DIR = GENERATED_DIR / "eval"
 
-_train_aug_found = []
-if Path("/kaggle/input").exists():
-    try:
-        _train_aug_found = [p.parent for p in Path("/kaggle/input").rglob("protocol_aug.txt")]
-        if not _train_aug_found:
-            _train_aug_found = [p for p in Path("/kaggle/input").rglob("train_aug") if p.is_dir()]
-    except Exception:
-        pass
+# train_aug: shallow glob — protocol_aug.txt lives directly inside the folder
+_train_aug_found = _kag_glob("*/train_aug", "*/generated/train_aug")
+if not _train_aug_found:
+    # fallback: check if protocol_aug.txt exists at any shallow match
+    for p in _kag_glob("*/train_aug*"):
+        if (p / "protocol_aug.txt").exists():
+            _train_aug_found.append(p)
 
 TRAIN_AUG_DIR = _first_existing(
     _train_aug_found +

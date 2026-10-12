@@ -21,26 +21,39 @@ PROTOCOL_NAMES = {
 def la_root() -> Path:
     """
     Folder that holds ASVspoof2019_LA_train/dev/eval and the protocols.
-    Found by searching across ASVSPOOF_DIR, LOCAL_DATA, and any Kaggle input folders.
+    Uses fast shallow glob in /kaggle/input instead of slow rglob.
     """
     name = "ASVspoof2019_LA_cm_protocols"
-    search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
+
+    # 1. Already on local disk (fastest check)
+    for sdir in [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]:
+        if sdir.exists() and (sdir / name).is_dir():
+            return sdir
+
+    # 2. Shallow glob in /kaggle/input at known depths (< 1 sec even for 15 GB datasets)
     if Path("/kaggle/input").exists():
-        search_dirs.extend([d for d in Path("/kaggle/input").glob("*") if d.is_dir()])
-        search_dirs.append(Path("/kaggle/input"))
+        kag = Path("/kaggle/input")
+        for pat in ("*/asvspoof*/LA/LA", "*/asvspoof2019/LA/LA",
+                    "*/asvspoof*/LA", "*/asvspoof2019/LA", "*/*/*/LA"):
+            for p in kag.glob(pat):
+                if p.is_dir() and (p / name).is_dir():
+                    return p
+
+    # 3. General search in config dirs (not rglob — depth-limited)
+    search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
     for sdir in search_dirs:
         if not sdir.exists():
             continue
-        if (sdir / name).is_dir():
-            return sdir
-        try:
-            for hit in sdir.rglob(name):
+        for depth in range(1, 5):
+            for hit in sdir.glob("/".join(["*"] * depth + [name])):
                 if hit.is_dir():
                     return hit.parent
-        except Exception:
-            pass
-    sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under any candidate path. "
-             f"Checked: {[str(d) for d in search_dirs if d.exists()]}. Finish T2 / unpack asvspoof first.")
+
+    sys.exit(
+        f"ERROR: no ASVspoof2019_LA_cm_protocols folder found. "
+        f"Checked: {[str(d) for d in search_dirs if d.exists()]}. "
+        f"Run Step 2 to unpack asvspoof first."
+    )
 
 
 def split_dir(split: str) -> Path:
@@ -49,12 +62,10 @@ def split_dir(split: str) -> Path:
     direct = root / f"ASVspoof2019_LA_{split}"
     if direct.exists():
         return direct
-    try:
-        for match in root.rglob(f"ASVspoof2019_LA_{split}"):
-            if match.is_dir():
-                return match
-    except Exception:
-        pass
+    # Fast: check one level deeper (handles nested layout)
+    for child in root.iterdir():
+        if child.is_dir() and child.name == f"ASVspoof2019_LA_{split}":
+            return child
     return direct
 
 
@@ -90,17 +101,17 @@ def condition_dir(condition: str) -> Path:
     if condition in ("clean", "clean_subset"):
         return split_dir("eval")
     cand = config.EVAL_CONDITIONS_DIR / condition
-    if (cand / "flac").exists() or (cand.is_dir() and list(cand.glob("*.flac"))):
-        return cand
     if cand.exists():
         return cand
+    # Fast: check one level inside /kaggle/input only
     if Path("/kaggle/input").exists():
-        try:
-            for d in Path("/kaggle/input").rglob(condition):
-                if d.is_dir() and ((d / "flac").exists() or list(d.glob("*.flac")) or (d.parent.name == "eval")):
-                    return d
-        except Exception:
-            pass
+        for p in Path("/kaggle/input").glob(f"*/{condition}"):
+            if p.is_dir():
+                return p
+        # e.g. eval_noisy/noisy_snr0 layout
+        for p in Path("/kaggle/input").glob(f"*/eval*/{condition}"):
+            if p.is_dir():
+                return p
     return cand
 
 

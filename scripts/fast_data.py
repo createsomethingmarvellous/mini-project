@@ -114,33 +114,35 @@ def _extract(tar, member):
 
 
 def is_already_available(name: str) -> bool:
-    """Check if the dataset is already extracted and present in /kaggle/input."""
-    if Path("/kaggle/input").exists():
-        if name == "asvspoof":
-            try:
-                if list(Path("/kaggle/input").rglob("ASVspoof2019_LA_cm_protocols")):
+    """Check if the dataset is already extracted in /kaggle/input (fast, no file scan)."""
+    if not Path("/kaggle/input").exists():
+        return False
+    kag = Path("/kaggle/input")
+    if name == "asvspoof":
+        # Check known shallow paths only — never scan audio files
+        for pat in ("*/asvspoof*/LA/LA", "*/asvspoof2019/LA/LA", "*/asvspoof*/LA"):
+            for p in kag.glob(pat):
+                if p.is_dir() and (
+                    (p / "ASVspoof2019_LA_cm_protocols").is_dir()
+                    or any(c.name.startswith("ASVspoof2019_LA") for c in p.iterdir() if c.is_dir())
+                ):
                     return True
-            except Exception:
-                pass
-        elif name == "train_aug":
-            try:
-                if list(Path("/kaggle/input").rglob("protocol_aug.txt")):
+    elif name == "train_aug":
+        for pat in ("*/train_aug", "*/generated/train_aug"):
+            for p in kag.glob(pat):
+                if p.is_dir():
                     return True
-            except Exception:
-                pass
-        elif name == "noise":
-            try:
-                if list(Path("/kaggle/input").rglob("noise_train")):
+    elif name == "noise":
+        for pat in ("*/noise*/noise_train", "*/noise_train", "*/MS-SNSD/noise_train"):
+            for p in kag.glob(pat):
+                if p.is_dir():
                     return True
-            except Exception:
-                pass
-        elif name.startswith("eval_"):
-            cond_prefix = name.replace("eval_", "")
-            try:
-                if [d for d in Path("/kaggle/input").rglob(f"{cond_prefix}_snr*") if d.is_dir()]:
+    elif name.startswith("eval_"):
+        cond_prefix = name.replace("eval_", "")
+        for pat in (f"*/{cond_prefix}_snr*", f"*/{name}"):
+            for p in kag.glob(pat):
+                if p.is_dir():
                     return True
-            except Exception:
-                pass
     return False
 
 
