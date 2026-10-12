@@ -18,7 +18,7 @@ PROTOCOL_NAMES = {
 
 
 @lru_cache(maxsize=1)
-def la_root(required: bool = True):
+def la_root() -> Path:
     """
     Folder that holds ASVspoof2019_LA_train/dev/eval and the protocols.
     Found by searching across ASVSPOOF_DIR, LOCAL_DATA, and any Kaggle input folders.
@@ -26,20 +26,23 @@ def la_root(required: bool = True):
     name = "ASVspoof2019_LA_cm_protocols"
     search_dirs = [config.LOCAL_DATA, config.ASVSPOOF_DIR, config.DATA_BASE, config.BASE]
     if Path("/kaggle/input").exists():
+        search_dirs.append(Path("/kaggle/input"))
         search_dirs.extend([d for d in Path("/kaggle/input").glob("*") if d.is_dir()])
         search_dirs.extend([d for d in Path("/kaggle/input").glob("*/*") if d.is_dir()])
         search_dirs.extend([d for d in Path("/kaggle/input").glob("*/*/*") if d.is_dir()])
+
     for sdir in search_dirs:
         if not sdir.exists():
             continue
-        for depth in range(5):
+        for depth in range(6):
             hits = sorted(sdir.glob("/".join(["*"] * depth + [name])))
             if hits:
                 return hits[0].parent
-    if not required:
-        return None
-    sys.exit(f"ERROR: no ASVspoof2019_LA_cm_protocols folder under any candidate path. "
-             f"Checked: {[str(d) for d in search_dirs if d.exists()]}. Finish T2 / unpack asvspoof first.")
+
+    raise FileNotFoundError(
+        f"ERROR: no {name} folder under any candidate path. "
+        f"Checked: {[str(d) for d in search_dirs if d.exists()]}. Finish T2 / unpack asvspoof first."
+    )
 
 
 def split_dir(split: str) -> Path:

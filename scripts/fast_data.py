@@ -130,11 +130,11 @@ def unpack(name: str, delete_archive: bool = False, force: bool = False) -> None
     if name == "asvspoof":
         try:
             import common
-            la = common.la_root(required=False)
+            la = common.la_root()
             if la and ((la / "ASVspoof2019_LA_train").exists() or (la / "ASVspoof2019_LA_cm_protocols").exists()):
                 print(f"  asvspoof         already available on disk at {la} (skipping unpack)")
                 return
-        except BaseException:
+        except Exception:
             pass
 
     if name == "train_aug" and (config.TRAIN_AUG_DIR / "protocol_aug.txt").exists():
