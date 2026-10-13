@@ -43,9 +43,27 @@ def main():
         if args.seed is None:
             sys.exit("--seed is required for models B and C")
         tag = f"{args.model}_seed{args.seed}"
-        weights = config.CHECKPOINT_DIR / tag / "swa.pth"
-    if not weights.exists():
-        sys.exit(f"ERROR: weights not found: {weights}")
+        candidates = [
+            config.CHECKPOINT_DIR / tag,
+            config.BASE / "checkpoints" / tag,
+            Path("/kaggle/working/mini_project/checkpoints") / tag,
+            Path("/kaggle/working/checkpoints") / tag,
+            Path("./checkpoints") / tag,
+        ]
+        target_dir = next((c for c in candidates if c.is_dir()), config.CHECKPOINT_DIR / tag)
+        weights = target_dir / "swa.pth"
+        if not weights.exists():
+            best_dev = target_dir / "best_dev.pth"
+            if best_dev.exists():
+                print(f"ℹ️ Notice: swa.pth not found. Using best dev weights: {best_dev}")
+                weights = best_dev
+            else:
+                last_ckpt = target_dir / "last_checkpoint.pth"
+                if last_ckpt.exists():
+                    print(f"ℹ️ Notice: swa.pth / best_dev.pth not found. Using last_checkpoint: {last_ckpt}")
+                    weights = last_ckpt
+                else:
+                    sys.exit(f"ERROR: weights not found: {weights} (or {best_dev})")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     conf = ab.load_aasist_config()
@@ -54,7 +72,10 @@ def main():
         model_weights = torch.load(weights, map_location=device, weights_only=False)
     except TypeError:
         model_weights = torch.load(weights, map_location=device)
-    model.load_state_dict(model_weights)
+    if isinstance(model_weights, dict) and "model" in model_weights:
+        model_weights = model_weights.get("state", {}).get("swa") or model_weights["model"]
+    clean_weights = {(k[7:] if k.startswith("module.") else k): v for k, v in model_weights.items()}
+    model.load_state_dict(clean_weights)
     print(f"Model {tag} loaded from {weights}")
     print(f"Reading audio from {config.DATA_BASE}"
           + ("" if config.DATA_BASE == config.LOCAL_DATA else

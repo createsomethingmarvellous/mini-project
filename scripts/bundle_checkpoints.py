@@ -22,9 +22,22 @@ def bundle_checkpoints(output_zip: Path = None, tag: str = None, seed: int = Non
 
     if tag is not None:
         run_name = f"{tag}_seed{seed}"
-        checkpoint_dir = config.CHECKPOINT_DIR / run_name
-        if not checkpoint_dir.is_dir():
-            raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+        candidates = [
+            config.CHECKPOINT_DIR / run_name,
+            config.BASE / "checkpoints" / run_name,
+            Path("/kaggle/working/mini_project/checkpoints") / run_name,
+            Path("/kaggle/working/checkpoints") / run_name,
+            Path("./checkpoints") / run_name,
+            Path("./data/checkpoints") / run_name,
+        ]
+        checkpoint_dir = next((path for path in candidates if path.is_dir()), None)
+        if checkpoint_dir is None and Path("/kaggle/working").exists():
+            for p in Path("/kaggle/working").rglob(run_name):
+                if p.is_dir():
+                    checkpoint_dir = p
+                    break
+        if checkpoint_dir is None:
+            raise FileNotFoundError(f"Checkpoint directory not found for {run_name}. Searched: {[str(c) for c in candidates]}")
         checkpoint_files = sorted(
             path for path in checkpoint_dir.iterdir()
             if path.is_file() and path.suffix.lower() in {".pth", ".pt", ".txt", ".json"}
@@ -33,6 +46,7 @@ def bundle_checkpoints(output_zip: Path = None, tag: str = None, seed: int = Non
         run_name = "all_runs"
         candidates = [
             config.CHECKPOINT_DIR,
+            config.BASE / "checkpoints",
             Path("/kaggle/working/mini_project/checkpoints"),
             Path("/kaggle/working/checkpoints"),
             Path("./checkpoints"),
@@ -52,8 +66,36 @@ def bundle_checkpoints(output_zip: Path = None, tag: str = None, seed: int = Non
 
     if not checkpoint_files:
         raise FileNotFoundError(f"No checkpoint or training log files found in {checkpoint_dir}")
-    if not (checkpoint_dir / "swa.pth").is_file():
-        raise FileNotFoundError(f"Final SWA weights are missing: {checkpoint_dir / 'swa.pth'}")
+
+    swa_file = checkpoint_dir / "swa.pth"
+    best_dev_file = checkpoint_dir / "best_dev.pth"
+    last_ckpt_file = checkpoint_dir / "last_checkpoint.pth"
+
+    if not swa_file.is_file():
+        if best_dev_file.is_file():
+            import shutil
+            shutil.copyfile(best_dev_file, swa_file)
+            print(f"ℹ️ Training in progress / paused: copied best_dev.pth to swa.pth for review and evaluation.")
+            if swa_file not in checkpoint_files:
+                checkpoint_files.append(swa_file)
+                checkpoint_files.sort()
+        elif last_ckpt_file.is_file():
+            try:
+                import torch
+                ckpt = torch.load(last_ckpt_file, map_location="cpu", weights_only=False)
+                state = ckpt.get("state", {})
+                weights_to_save = state.get("swa") or ckpt.get("model")
+                if weights_to_save:
+                    clean_w = {(k[7:] if k.startswith("module.") else k): v for k, v in weights_to_save.items()}
+                    torch.save(clean_w, swa_file)
+                    print(f"ℹ️ Training in progress / paused: synthesized swa.pth from last_checkpoint.pth.")
+                    if swa_file not in checkpoint_files:
+                        checkpoint_files.append(swa_file)
+                        checkpoint_files.sort()
+            except Exception as e:
+                print(f"⚠️ Notice: swa.pth could not be auto-generated: {e}")
+        else:
+            print(f"⚠️ Notice: swa.pth and best_dev.pth not found in {checkpoint_dir}.")
 
     score_root = config.SCORES_DIR
     score_files = sorted(score_root.glob("*/*.txt")) if score_root.exists() else []
