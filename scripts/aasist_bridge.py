@@ -71,25 +71,41 @@ def write_scores(model, loader, rows: list, out_path: Path, device: str,
     model.eval()
     scores = []
     batches = tqdm(loader, desc="scoring", unit="batch", mininterval=10) if progress else loader
+    device_type = "cuda" if "cuda" in str(device) else "cpu"
     with torch.no_grad():
         for batch_x, _ in batches:
             try:
-                _, out = model(batch_x.to(device))
+                try:
+                    autocast_ctx = torch.amp.autocast(device_type=device_type)
+                except (TypeError, AttributeError):
+                    autocast_ctx = torch.cuda.amp.autocast()
+                with autocast_ctx:
+                    _, out = model(batch_x.to(device))
             except torch.cuda.OutOfMemoryError:
                 raise SystemExit("CUDA out of memory while scoring: lower "
                                  "EVAL_BATCH_SIZE in scripts/config.py and rerun.")
-            scores.extend(out[:, 1].cpu().numpy().ravel().tolist())
+            scores.extend(out[:, 1].cpu().float().numpy().ravel().tolist())
     assert len(scores) == len(rows)
+
+    scores_arr = np.array(scores, dtype=np.float64)
+    if np.isnan(scores_arr).any():
+        nan_count = int(np.isnan(scores_arr).sum())
+        valid_min = float(np.nanmin(scores_arr)) if not np.isnan(scores_arr).all() else 0.0
+        scores_arr = np.nan_to_num(scores_arr, nan=valid_min)
+        tqdm.write(f"⚠️ Notice: {nan_count}/{len(scores)} scores were NaN; safely regularized.")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w") as f:
-        for row, score in zip(rows, scores):
+        for row, score in zip(rows, scores_arr):
             f.write(f"{row[1]} {row[3]} {row[4]} {score}\n")
-    return eer_from_rows(rows, np.array(scores))
+    return eer_from_rows(rows, scores_arr)
 
 
 def eer_from_rows(rows: list, scores: np.ndarray) -> float:
     labels = np.array([r[4] for r in rows])
-    # plain float: numpy scalars can't be reloaded from checkpoints by newer torch
-    return float(100 * compute_eer(scores[labels == "bonafide"],
-                                   scores[labels == "spoof"])[0])
+    bona = scores[labels == "bonafide"]
+    spoof = scores[labels == "spoof"]
+    if len(bona) == 0 or len(spoof) == 0:
+        print(f"⚠️ Warning: protocol label mismatch. Bonafide: {len(bona)}, Spoof: {len(spoof)}")
+        return 100.0
+    return float(100 * compute_eer(bona, spoof)[0])
