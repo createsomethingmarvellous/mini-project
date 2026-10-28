@@ -124,6 +124,9 @@ def main():
     if not torch.cuda.is_available():
         sys.exit("No GPU - Runtime > Change runtime type > GPU.")
     device = "cuda"
+    import gc
+    gc.collect()
+    torch.cuda.empty_cache()
 
     conf = ab.load_aasist_config()
     set_seed(args.seed, conf)
