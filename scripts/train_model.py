@@ -80,7 +80,7 @@ def average_into(swa_state, model_state, n):
 
 
 class FocalLoss(nn.Module):
-    """Focal Loss (gamma=2.0) down-weights easy samples and focuses gradients on hard noisy/enhanced clips."""
+    """Focal Loss (gamma=2.0) with numerical stability clamping to prevent FP16 NaNs."""
     def __init__(self, weight=None, gamma=2.0):
         super().__init__()
         self.weight = weight
@@ -89,9 +89,20 @@ class FocalLoss(nn.Module):
 
     def forward(self, inputs, targets):
         logpt = -self.ce(inputs, targets)
-        pt = torch.exp(logpt)
-        loss = -((1 - pt) ** self.gamma) * logpt
+        pt = torch.exp(torch.clamp(logpt, min=-20.0, max=0.0))
+        loss = -((1.0 - pt) ** self.gamma) * logpt
+        loss = torch.nan_to_num(loss, nan=0.0, posinf=10.0, neginf=0.0)
         return loss.mean()
+
+
+def sanitize_batchnorm(model):
+    """Restores contaminated BatchNorm buffers (running_mean / running_var) from NaNs."""
+    for m in model.modules():
+        if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            if m.running_mean is not None and torch.isnan(m.running_mean).any():
+                m.running_mean.nan_to_num_(0.0)
+            if m.running_var is not None and torch.isnan(m.running_var).any():
+                m.running_var.nan_to_num_(1.0)
 
 
 def main():
@@ -189,6 +200,7 @@ def main():
         model_weights = ckpt["model"]
         clean_weights = {(k[7:] if k.startswith("module.") else k): v for k, v in model_weights.items()}
         get_raw_model(model).load_state_dict(clean_weights)
+        sanitize_batchnorm(model)
         optimizer.load_state_dict(ckpt["optimizer"])
         scheduler.load_state_dict(ckpt["scheduler"])
         state = ckpt["state"]
@@ -222,16 +234,23 @@ def main():
             with autocast_ctx:
                 _, out = model(batch_x, Freq_aug=True)
                 loss = criterion(out, batch_y)
+            if torch.isnan(loss) or torch.isinf(loss):
+                optimizer.zero_grad()
+                sanitize_batchnorm(model)
+                continue
             if args.amp:
                 scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 scaler.step(optimizer)
                 scaler.update()
             else:
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
             scheduler.step()
             state["batch"] += 1
-            state["loss_sum"] += loss.item() * batch_x.size(0)
+            state["loss_sum"] += (loss.item() if not torch.isnan(loss) else 0.0) * batch_x.size(0)
             state["seen"] += batch_x.size(0)
 
             if time.time() - last_save >= save_every:
@@ -242,6 +261,7 @@ def main():
 
         minutes = minutes_before + (time.time() - start) / 60
         bar.close()
+        sanitize_batchnorm(model)
         dev_eer = ab.write_scores(model, dev_loader, dev_rows,
                                   run_dir / "dev_scores.txt", device, progress=True)
         if dev_eer <= state["best_dev_eer"]:
