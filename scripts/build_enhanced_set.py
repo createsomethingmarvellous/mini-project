@@ -90,6 +90,8 @@ def main():
         failed = 0
         written = 0
         bs = args.batch_size
+        if args.model == "sepformer" and bs > 8:
+            bs = 8  # SepFormer Transformer attention requires smaller batches on 16GB GPUs
 
         pbar = tqdm(total=len(rows), desc=f"{args.model}_snr{snr}", unit="file", mininterval=5)
         pbar.update(skipped)
@@ -114,6 +116,8 @@ def main():
                     pbar.update(1)
 
             except Exception as e:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 # Fallback to single-file processing if batch fails
                 for src, out in chunk:
                     try:
