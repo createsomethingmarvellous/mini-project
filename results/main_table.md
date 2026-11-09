@@ -1,0 +1,4 @@
+| Model | Clean (full) | noisy (avg 3 SNRs) | metricgan (avg 3 SNRs) | sepformer (avg 3 SNRs) |
+|---|---|---|---|---|
+| Model A (pretrained, clean) | 0.83 | 34.11 | 29.17 | 23.25 |
+| Model B (noise-augmented) | 12.93 ± 9.22 (n=3) | 26.73 ± 9.90 (n=3) | 22.05 ± 3.14 (n=3) | 26.45 ± 6.85 (n=3) |
