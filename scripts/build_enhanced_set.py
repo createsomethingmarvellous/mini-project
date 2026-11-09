@@ -66,6 +66,8 @@ def main():
                         help="process only N files per SNR - test with this first")
     parser.add_argument("--batch_size", type=int, default=config.ENHANCEMENT_BATCH_SIZE,
                         help=f"batch size for GPU inference (default: {config.ENHANCEMENT_BATCH_SIZE})")
+    parser.add_argument("--amp", action="store_true",
+                        help="enable FP16 Automatic Mixed Precision for faster inference")
     args = parser.parse_args()
 
     rows = eval_rows_for("noisy")[:args.limit]
@@ -106,12 +108,18 @@ def main():
                 for idx, w in enumerate(wavs):
                     batch_tensor[idx, :len(w)] = torch.from_numpy(w)
 
+                try:
+                    autocast_ctx = torch.amp.autocast('cuda', enabled=args.amp)
+                except (TypeError, AttributeError):
+                    autocast_ctx = torch.cuda.amp.autocast(enabled=args.amp)
+
                 with torch.no_grad():
-                    enhanced_batch = enhance(batch_tensor, lengths_tensor)
+                    with autocast_ctx:
+                        enhanced_batch = enhance(batch_tensor, lengths_tensor)
 
                 for idx, (src, out) in enumerate(chunk):
                     orig_len = len(wavs[idx])
-                    save_flac(out, enhanced_batch[idx, :orig_len].cpu().numpy())
+                    save_flac(out, enhanced_batch[idx, :orig_len].cpu().float().numpy())
                     written += 1
                     pbar.update(1)
 
@@ -125,8 +133,9 @@ def main():
                         b_t = torch.from_numpy(w).unsqueeze(0)
                         l_t = torch.tensor([1.0], dtype=torch.float32)
                         with torch.no_grad():
-                            enh = enhance(b_t, l_t)[0]
-                        save_flac(out, enh.cpu().numpy())
+                            with autocast_ctx:
+                                enh = enhance(b_t, l_t)[0]
+                        save_flac(out, enh.cpu().float().numpy())
                         written += 1
                     except Exception as single_e:
                         failed += 1
