@@ -90,7 +90,8 @@ def main():
         groups[re.sub(r"_seed\d+$", "", tag)].append(tag)
     names = {"A": "Model A (pretrained, clean)",
              "B": "Model B (noise-augmented)",
-             "C": "Model C (clean control)"}
+             "C": "Model C (clean control)",
+             "D": "Model D (enhancement-aware)"}
 
     def snr_avg(tag, proc):
         vals = [pooled[tag].get(f"{proc}_snr{s}", np.nan) for s in config.EVAL_SNRS_DB]

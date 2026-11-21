@@ -37,7 +37,7 @@ import aasist_bridge as ab
 from utils import create_optimizer, seed_worker, set_seed  # AASIST utils
 
 
-def training_files(clean_only: bool):
+def training_files(clean_only: bool, tag: str = "B"):
     rows = read_protocol(protocol_path("train"))
     train_dir = split_dir("train")
     train_flac = train_dir / "flac" if (train_dir / "flac").exists() else train_dir
@@ -63,6 +63,29 @@ def training_files(clean_only: bool):
                      f"(e.g. {missing[0]}). Re-run T9 until it finishes.")
         rows += aug_rows
         paths.update({r[1]: aug_flac / f"{r[1]}.flac" for r in aug_rows})
+
+        if tag == "D":
+            enh_proto = config.TRAIN_ENHANCED_DIR / "protocol_enhanced.txt"
+            if not enh_proto.exists():
+                search_bases = [config.LOCAL_DATA]
+                if Path("/kaggle/input").exists():
+                    search_bases.append(Path("/kaggle/input"))
+                hit = common.find_file_fast("protocol_enhanced.txt", search_bases)
+                if hit is not None:
+                    enh_proto = hit
+            if not enh_proto.exists():
+                sys.exit("ERROR: protocol_enhanced.txt missing for Model D. Run scripts/build_enhanced_set.py --mode train --model metricgan first.")
+            enh_rows = read_protocol(enh_proto)
+            enh_dir = enh_proto.parent
+            enh_flac = enh_dir / "flac" if (enh_dir / "flac").exists() else enh_dir
+            have_enh = set(os.listdir(enh_flac)) if enh_flac.exists() else set()
+            valid_enh = [r for r in enh_rows if f"{r[1]}.flac" in have_enh]
+            if len(valid_enh) < len(enh_rows):
+                print(f"ℹ️ Found {len(valid_enh)}/{len(enh_rows)} built enhanced training files.")
+            rows += valid_enh
+            paths.update({r[1]: enh_flac / f"{r[1]}.flac" for r in valid_enh})
+            print(f"Model D training set loaded: {len(paths)} total audio files (Clean + Noisy + Enhanced).")
+
     labels = {r[1]: int(r[4] == "bonafide") for r in rows}
     return paths, labels
 
@@ -107,8 +130,8 @@ def sanitize_batchnorm(model):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tag", choices=["B", "C"], required=True,
-                        help="B = noise-augmented model, C = clean control")
+    parser.add_argument("--tag", choices=["B", "C", "D"], required=True,
+                        help="B = noise-augmented model, C = clean control, D = enhancement-aware model")
     parser.add_argument("--seed", type=int, choices=config.SEEDS, required=True)
     parser.add_argument("--clean", action="store_true",
                         help="train on clean data only (use with --tag C)")
@@ -118,8 +141,9 @@ def main():
     parser.add_argument("--amp", action="store_true",
                         help="enable FP16 Automatic Mixed Precision (uses Tensor Cores, saves ~40% VRAM)")
     args = parser.parse_args()
-    if (args.tag == "C") != args.clean:
-        sys.exit("Use --clean exactly when --tag C.")
+    if args.tag == "C" and not args.clean:
+        args.clean = True
+    clean_only = (args.tag == "C") or args.clean
 
     if not torch.cuda.is_available():
         sys.exit("No GPU - Runtime > Change runtime type > GPU.")
@@ -135,7 +159,7 @@ def main():
     ckpt_path = run_dir / "last_checkpoint.pth"
 
     # ---- data --------------------------------------------------------------
-    paths, labels = training_files(args.clean)
+    paths, labels = training_files(clean_only=clean_only, tag=args.tag)
     train_set = ab.TrainSet(paths, labels)
     bs = args.batch_size if args.batch_size else conf["batch_size"]
     batches_per_epoch = len(train_set) // bs      # drop_last, as in AASIST

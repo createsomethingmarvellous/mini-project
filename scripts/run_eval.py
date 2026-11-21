@@ -30,7 +30,7 @@ import aasist_bridge as ab
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["A", "B", "C"], required=True)
+    parser.add_argument("--model", choices=["A", "B", "C", "D"], required=True)
     parser.add_argument("--seed", type=int, choices=config.SEEDS)
     parser.add_argument("--conditions", nargs="+", default=config.eval_conditions(),
                         help=f"default: all of {config.eval_conditions()}")
@@ -41,7 +41,7 @@ def main():
         tag, weights = "A", config.MODEL_A_WEIGHTS
     else:
         if args.seed is None:
-            sys.exit("--seed is required for models B and C")
+            sys.exit("--seed is required for models B, C, and D")
         tag = f"{args.model}_seed{args.seed}"
         candidates = [
             config.CHECKPOINT_DIR / tag,

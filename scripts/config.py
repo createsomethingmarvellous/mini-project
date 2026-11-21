@@ -194,6 +194,26 @@ TRAIN_AUG_DIR = _first_existing(
     LOCAL_DATA / "generated" / "train_aug"
 )
 
+# train_enhanced: find protocol_enhanced.txt directly via fast pruned search
+_proto_enh_hit = find_file_fast("protocol_enhanced.txt", _kag_roots)
+if _proto_enh_hit is not None:
+    _train_enh_found = _proto_enh_hit.parent
+else:
+    _train_enh_found = find_folder_fast("train_enhanced", _kag_roots)
+    if _train_enh_found and (_train_enh_found / "generated" / "train_enhanced").exists():
+        _train_enh_found = _train_enh_found / "generated" / "train_enhanced"
+
+_train_enh_list = [_train_enh_found] if _train_enh_found else []
+
+TRAIN_ENHANCED_DIR = _first_existing(
+    _train_enh_list +
+    [LOCAL_DATA / "generated" / "train_enhanced", DATA_BASE / "generated" / "train_enhanced", BASE / "generated" / "train_enhanced"] +
+    [k / "generated" / "train_enhanced" for k in ALL_KAG_DIRS] +
+    [k / "train_enhanced" for k in ALL_KAG_DIRS] +
+    [k for k in ALL_KAG_DIRS if "train_enhanced" in k.name.lower() and not k.name.endswith(".tar")],
+    LOCAL_DATA / "generated" / "train_enhanced"
+)
+
 # Checkpoints (auto-search Drive, Kaggle working dir, and Kaggle input datasets)
 CHECKPOINT_DIR = _first_existing(
     [BASE / "checkpoints"] + [k / "checkpoints" for k in ALL_KAG_DIRS] + [k for k in ALL_KAG_DIRS if "checkpoint" in k.name.lower()],
