@@ -94,7 +94,7 @@ Two distinct state-of-the-art speech enhancement models are evaluated:
 
 ---
 
-## 5. Quantitative Results & Official Benchmarks
+## 5. Quantitative Results & Presentation Visuals
 
 ### 5.1 Primary Benchmark: Main Results Table
 *Values represent Equal Error Rate (EER, %). Lower is better.*
@@ -106,6 +106,9 @@ Two distinct state-of-the-art speech enhancement models are evaluated:
 | **Model B** *(Seed 123)* | 7.74% | 20.31% | 21.05% | 21.32% |
 | **Model B** *(Seed 2024)* | 23.58% | 44.20% | 26.62% | 39.43% |
 | **Model B** *(Mean $\pm$ Std, $n=3$)* | 12.93 $\pm$ 9.22% | **26.73 $\pm$ 9.90%** | **22.05 $\pm$ 3.14%** | 26.45 $\pm$ 6.85% |
+
+### Figure 1: Main Benchmark Comparison Bar Chart
+![Main Benchmark Comparison Bar Chart](../results/figures/fig1_main_benchmark_comparison.png)
 
 > [!NOTE]
 > The combination of **Model B + MetricGAN+** achieves the lowest overall error rate (**22.05%**), demonstrating that multi-condition training provides resilience against SE processing artifacts.
@@ -124,18 +127,8 @@ Two distinct state-of-the-art speech enhancement models are evaluated:
 | **Model B** | Front-End MetricGAN+ | 13.31 $\pm$ 9.28% | **28.00 $\pm$ 3.03%** | **20.20 $\pm$ 3.51%** | **17.95 $\pm$ 3.20%** |
 | **Model B** | Front-End SepFormer | 13.31 $\pm$ 9.28% | 29.52 $\pm$ 7.72% | 25.62 $\pm$ 6.38% | 24.22 $\pm$ 6.70% |
 
----
-
-### 5.3 Per-Attack Analysis: Neural Vocoders vs. Acoustic Models
-Evaluating EER across the 13 unseen evaluation attacks (A07–A19) reveals why noise masking is so effective against modern deepfakes:
-
-| Attack ID | Synthesis Architecture | Pristine Clean (Model A) | Noisy 0 dB (Model A) | Vulnerability Diagnosis |
-|---|---|:---:|:---:|---|
-| **A09** | Vocoder-free / Spectral Filtering | **0.00%** | **1.24%** | **Highly Robust:** Macroscopic spectral differences survive noise. |
-| **A11** | Griffin-Lim Phase Reconstruction | **0.12%** | **1.86%** | **Highly Robust:** Magnitude envelope artifacts remain prominent. |
-| **A17** | Waveform Filtering + Neural Vocoder | 0.58% | **38.45%** | **Vulnerable:** Noise drowns micro-timing phase artifacts. |
-| **A18** | Tacotron 2 + WaveRNN Vocoder | 0.62% | **42.10%** | **Catastrophic Failure:** Harmonic structure swamped by noise. |
-| **A19** | Modern Neural Vocoder (WaveGlow) | 0.45% | **41.80%** | **Catastrophic Failure:** High-frequency deepfake cues masked. |
+### Figure 2: Degradation & Recovery Trajectory Across SNRs
+![SNR Degradation Trajectory Curves](../results/figures/fig2_snr_degradation_curves.png)
 
 ---
 
@@ -147,15 +140,45 @@ A primary hypothesis in prior literature was that cascading an off-the-shelf spe
 - Front-end SE algorithms optimize for human acoustic perception (PESQ/STOI) by suppressing background energy via non-linear spectral gating or phase approximation.
 - This suppression introduces **synthetic spectral smearing, musical noise, and phase distortion**. To a countermeasure trained solely on clean speech, these SE artifacts act as out-of-distribution noise, limiting recovery.
 
-### 6.2 Augmentation Synergy with SE
-Model B (exposed to noise and reverberation during training) demonstrates substantially higher tolerance to MetricGAN+ artifacts ($22.05\%$ EER) compared to Model A ($29.17\%$). Multi-condition training conditions the graph attention layers to tolerate spectral perturbations.
-
-### 6.3 Seed Variability & Loss Landscapes
-Across three training seeds, Model B exhibited noticeable variance on clean test data ($7.46\%$ vs. $23.58\%$). Investigation revealed that multi-condition training on small datasets ($+30\%$) can lead to saddle-point convergence. Implementing Stochastic Weight Averaging (SWA) and gradient clipping stabilized training, providing flat-minima convergence.
+### Figure 3: The Enhancement Distortion Paradox Diagnostic
+![The Enhancement Distortion Paradox Gap](../results/figures/fig3_enhancement_paradox.png)
 
 ---
 
-## 7. Software Engineering & Infrastructure Milestones
+### 6.2 Per-Attack Analysis: Neural Vocoders vs. Acoustic Models
+Evaluating EER across the 13 unseen evaluation attacks (A07–A19) reveals why noise masking is so effective against modern deepfakes:
+
+| Attack ID | Synthesis Architecture | Pristine Clean (Model A) | Noisy 0 dB (Model A) | Vulnerability Diagnosis |
+|---|---|:---:|:---:|---|
+| **A09** | Vocoder-free / Spectral Filtering | **0.00%** | **1.24%** | **Highly Robust:** Macroscopic spectral differences survive noise. |
+| **A11** | Griffin-Lim Phase Reconstruction | **0.12%** | **1.86%** | **Highly Robust:** Magnitude envelope artifacts remain prominent. |
+| **A17** | Waveform Filtering + Neural Vocoder | 0.58% | **38.45%** | **Vulnerable:** Noise drowns micro-timing phase artifacts. |
+| **A18** | Tacotron 2 + WaveRNN Vocoder | 0.62% | **42.10%** | **Catastrophic Failure:** Harmonic structure swamped by noise. |
+| **A19** | Modern Neural Vocoder (WaveGlow) | 0.45% | **41.80%** | **Catastrophic Failure:** High-frequency deepfake cues masked. |
+
+### Figure 4: Per-Attack Breakdown (Neural Vocoders vs. Acoustic Models)
+![Per-Attack Vulnerability Breakdown](../results/figures/fig4_attack_vulnerability_dissection.png)
+
+---
+
+### 6.3 Multi-Seed Stability & Loss Landscape Convergence
+Across three training seeds, Model B exhibited noticeable variance on clean test data ($7.46\%$ vs. $23.58\%$). Investigation revealed that multi-condition training on small datasets ($+30\%$) can lead to saddle-point convergence. Implementing Stochastic Weight Averaging (SWA) and gradient clipping stabilized training, providing flat-minima convergence.
+
+### Figure 5: Multi-Seed Stability Analysis (Seeds 42, 123, 2024)
+![Model B Multi-Seed Variance](../results/figures/fig5_model_b_seed_variance.png)
+
+---
+
+## 7. Master 16:9 Presentation Slide Dashboard
+
+For a single, high-impact slide summarizing the entirety of Phase 1 empirical findings, use the composite dashboard below:
+
+### Figure 6: Master Presentation Dashboard (16:9 Aspect Ratio)
+![Master Presentation Dashboard](../results/figures/fig6_presentation_master_dashboard.png)
+
+---
+
+## 8. Software Engineering & Infrastructure Milestones
 
 In addition to empirical benchmarking, Phase 1 delivered a robust, reproducible codebase:
 1. **Zero-Lag File System Walker:** Implemented `find_folder_fast()` and `find_file_fast()`, enabling sub-0.05 second directory discovery across 120,000+ files on Colab and Kaggle while eliminating browser lockups.
@@ -165,7 +188,7 @@ In addition to empirical benchmarking, Phase 1 delivered a robust, reproducible 
 
 ---
 
-## 8. Completed Phase 1 Deliverables Checklist
+## 9. Completed Phase 1 Deliverables Checklist
 
 | Deliverable Item | Target Specification | Status | Evidence / Verification |
 |---|---|:---:|---|
@@ -177,11 +200,12 @@ In addition to empirical benchmarking, Phase 1 delivered a robust, reproducible 
 | **D6: Model B Training** | Multi-condition training across 3 seeds | **`[DONE]`** | Seeds 42, 123, 2024 trained (`checkpoints/B_seed*/swa.pth`) |
 | **D7: Model B Evaluation** | 33 evaluation runs (3 seeds $\times$ 11 conditions) | **`[DONE]`** | 33 score files generated in `scores/B_seed*/*.txt` |
 | **D8: Official Results Tables** | Markdown & CSV summary generation | **`[DONE]`** | `main_table.md`, `per_snr_table.md`, `per_attack_table.md` |
-| **D9: Git Synchronization** | Clean version-controlled repository | **`[DONE]`** | Synced with GitHub `origin/main` |
+| **D9: Visual Assets Generated** | 300 DPI publication charts & master dashboard | **`[DONE]`** | Figures 1 through 6 in `results/figures/` (PNG & PDF) |
+| **D10: Git Synchronization** | Clean version-controlled repository | **`[DONE]`** | Synced with GitHub `origin/main` |
 
 ---
 
-## 9. Phase 2 Roadmap & Next Steps
+## 10. Phase 2 Roadmap & Next Steps
 
 Building on the complete experimental foundation of Phase 1, Phase 2 will execute two high-novelty extensions for conference/journal submission:
 
@@ -232,17 +256,19 @@ Use this outline for your Phase 1 presentation defense slides.
 - **Speech Enhancers:** MetricGAN+ (PESQ-optimized) and SepFormer (Transformer time-domain separation).
 
 ### Slide 5: Phase 1 Results: The Main Benchmark
-- **Show Table:** Present the Main Results Table (Model A vs. Model B across Clean, Noisy, MetricGAN+, SepFormer).
+- **Visual:** Insert `fig1_main_benchmark_comparison.png` or `fig2_snr_degradation_curves.png`.
 - **Highlight 1:** Baseline AASIST collapses from $0.83\%$ to $49.22\%$ EER at 0 dB SNR.
 - **Highlight 2:** Multi-condition Model B improves noisy robustness from $34.11\%$ to $26.73\%$.
 - **Highlight 3:** Model B + MetricGAN+ achieves the best overall performance ($22.05\%$).
 
 ### Slide 6: Key Discovery: The "Enhancement Distortion Paradox"
+- **Visual:** Insert `fig3_enhancement_paradox.png`.
 - **The Question:** Can test-time speech enhancement cure noise degradation?
 - **The Finding:** No. Standalone SE only recovers EER to $\sim 23\%$.
 - **The Reason:** Enhancement algorithms introduce non-linear spectral smearing and phase gating. The clean detector misinterprets these enhancement artifacts as acoustic noise.
 
 ### Slide 7: Attack Vulnerability Dissection (Per-Attack EER)
+- **Visual:** Insert `fig4_attack_vulnerability_dissection.png`.
 - **Contrast Two Attack Types:**
   - *Acoustic/Vocoder-free (A09, A11):* Remain 100% detectable under noise ($<2\%$ EER) because gross spectral envelopes survive.
   - *Neural Vocoders (A17, A18, A19):* Catastrophic failure ($>40\%$ EER) because additive noise selectively masks high-frequency harmonics and subtle phase discontinuities.
@@ -254,6 +280,7 @@ Use this outline for your Phase 1 presentation defense slides.
 - Completed 100% of planned Phase 1 experimental trials.
 
 ### Slide 9: Phase 2 Roadmap & Planned Enhancements
+- **Visual:** Insert `fig6_presentation_master_dashboard.png`.
 - **Path B (Explainability):** Visualizing Graph Attention Maps and measuring the Attention Dispersion Index (ADI).
 - **Path A (Model D):** Training an Enhancement-Aware Detector on tri-mixture data to break the Enhancement Paradox.
 - **Publication Target:** Preparing manuscript for IEEE/ACM Transactions / Interspeech submission.
