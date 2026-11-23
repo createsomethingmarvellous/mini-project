@@ -634,8 +634,16 @@ def main():
     plot_figure_7()
     plot_figure_8()
 
+    # Automatically generate ML Training Lifecycle Visuals
+    print("\n" + "=" * 70)
+    try:
+        import generate_ml_training_visuals
+        generate_ml_training_visuals.main()
+    except Exception as e:
+        print(f"Notice on ML training visuals: {e}")
+
     print("=" * 70)
-    print("All 8 presentation charts successfully generated in:")
+    print("All presentation and ML training charts successfully generated in:")
     print(f"  -> {FIGURES_DIR}")
     print("=" * 70)
 
